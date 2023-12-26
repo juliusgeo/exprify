@@ -6,30 +6,70 @@ class StatementMapper(ast.NodeTransformer):
 
     def visit_If(self, node):
         return ast.IfExp(
-            test=node.test,body=self.map_body(node),orelse=self.map_stmt(node.orelse[0])
-        )
-    
-    def visit_AugAssign(self, node):
-        target_load=ast.Name(id=node.target.id,ctx=ast.Load())
-        return ast.NamedExpr(
-            target=node.target,
-            value=ast.BinOp(left=target_load,op=node.op,right=node.value),
+            test=node.test,
+            body=self.map_body(node),
+            orelse=self.map_stmt(node.orelse[0]),
         )
 
+    def visit_AugAssign(self, node):
+        target_load = ast.Name(id=node.target.id, ctx=ast.Load())
+        return ast.NamedExpr(
+            target=node.target,
+            value=ast.BinOp(left=target_load, op=node.op, right=node.value),
+        )
+
+    def visit_ImportFrom(self, node):
+        imps = []
+        module = ast.Call(
+            func=ast.Name(id="__import__", ctx=ast.Load()),
+            args=[ast.Constant(value=node.module)],
+            keywords=[],
+        )
+        for name in node.names:
+            imps.append(
+                ast.NamedExpr(
+                    target=ast.Name(id=name.name, ctx=ast.Store()),
+                    value=ast.Call(
+                        func=ast.Name(id="getattr", ctx=ast.Load()),
+                        args=[module, ast.Constant(value=name.name)],
+                        keywords=[],
+                    ),
+                )
+            )
+
+        return ast.Tuple(elts=imps, ctx=ast.Load())
+
+    def visit_Import(self, node):
+        # Replace imports with __import__ calls
+        imps = []
+        for name in node.names:
+            imps.append(
+                ast.NamedExpr(
+                    target=ast.Name(id=name.name, ctx=ast.Store()),
+                    value=ast.Call(
+                        func=ast.Name(id="__import__", ctx=ast.Load()),
+                        args=[ast.Constant(value=name.name)],
+                        keywords=[],
+                    ),
+                )
+            )
+
+        return ast.Tuple(elts=imps, ctx=ast.Load())
+
     def visit_Assign(self, node):
-        if len(node.targets)==1:
-            return ast.NamedExpr(target=node.targets[0],value=node.value)
-        targets=[]
+        if len(node.targets) == 1:
+            return ast.NamedExpr(target=node.targets[0], value=node.value)
+        targets = []
         for target in node.targets:
-            targets.append(ast.NamedExpr(target=target,value=node.value))
-        return ast.Tuple(elts=targets,ctx=ast.Load())
+            targets.append(ast.NamedExpr(target=target, value=node.value))
+        return ast.Tuple(elts=targets, ctx=ast.Load())
 
     def visit_For(self, node):
         return ast.ListComp(
             elt=self.map_body(node),
             generators=[
                 ast.comprehension(
-                    target=ast.Name(id="_",ctx=ast.Store()),
+                    target=ast.Name(id="_", ctx=ast.Store()),
                     iter=node.iter,
                     is_async=False,
                     ifs=[],
@@ -38,9 +78,12 @@ class StatementMapper(ast.NodeTransformer):
         )
 
     def visit_While(self, node):
-        condition=node.test
-        iterator=ast.Call(
-            func=ast.Name(id='iter',ctx=ast.Load()),
+        condition = node.test
+        # This is an ast equivalent of iter(lambda: condition, False), which will produce true (potentially infinitely)
+        # until condition is false. This nicely sidesteps having to use takewhile, or other equivalents for emulating while loops
+        # in list comprehensions.
+        iterator = ast.Call(
+            func=ast.Name(id="iter", ctx=ast.Load()),
             args=[
                 ast.Lambda(
                     args=ast.arguments(
@@ -48,16 +91,20 @@ class StatementMapper(ast.NodeTransformer):
                         args=[],
                         kwonlyargs=[],
                         kw_defaults=[],
-                        defaults=[]),
-                    body=condition),
-                ast.Constant(value=False)],
-            keywords=[])
+                        defaults=[],
+                    ),
+                    body=condition,
+                ),
+                ast.Constant(value=False),
+            ],
+            keywords=[],
+        )
 
         return ast.ListComp(
             elt=self.map_body(node),
             generators=[
                 ast.comprehension(
-                    target=ast.Name(id="_",ctx=ast.Store()),
+                    target=ast.Name(id="_", ctx=ast.Store()),
                     iter=iterator,
                     is_async=False,
                     ifs=[],
@@ -94,17 +141,17 @@ class StatementMapper(ast.NodeTransformer):
         return ast.Tuple(elts=statements, ctx=ast.Load())
 
     def visit_FunctionDef(self, node):
+        # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
         if self.top_level_funcdef:
-            self.top_level_funcdef=False
-            function_body=self.map_body(node)
+            self.top_level_funcdef = False
+            function_body = self.map_body(node)
             return ast.Assign(
-                targets=[ast.Name(id=node.name,ctx=ast.Store())],
-                value=ast.Lambda(args=node.args,body=function_body),
+                targets=[ast.Name(id=node.name, ctx=ast.Store())],
+                value=ast.Lambda(args=node.args, body=function_body),
             )
         else:
-            function_body=self.map_body(node)
+            function_body = self.map_body(node)
             return ast.NamedExpr(
-                target=ast.Name(id=node.name,ctx=ast.Store()),
-                value=ast.Lambda(args=node.args,body=function_body),
+                target=ast.Name(id=node.name, ctx=ast.Store()),
+                value=ast.Lambda(args=node.args, body=function_body),
             )
-

@@ -10,6 +10,7 @@ def transpiled_function_object(func, debug=False):
     exec(compiled_ast, namespace)
     return namespace[func.__name__]
 
+
 def transpiled_function_ast(func, debug=False):
     mapper = StatementMapper()
     a = mapper.generic_visit(ast.parse(inspect.getsource(func)))
