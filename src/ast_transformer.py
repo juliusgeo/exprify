@@ -12,7 +12,10 @@ class StatementMapper(ast.NodeTransformer):
         )
 
     def visit_AugAssign(self, node):
-        target_load = ast.Name(id=node.target.id, ctx=ast.Load())
+        if isinstance(node.target, ast.Name):
+            target_load=ast.Name(id=node.target.id,ctx=ast.Load())
+        elif isinstance(node.target, ast.Attribute):
+            target_load=ast.Attribute(value=node.target.value, attr=node.target.attr, ctx=ast.Load())
         return ast.NamedExpr(
             target=node.target,
             value=ast.BinOp(left=target_load, op=node.op, right=node.value),
@@ -124,23 +127,43 @@ class StatementMapper(ast.NodeTransformer):
         return self.visit(node)
 
     def map_body(self, node):
-        statements = []
-
-        for i in node.body:
-            statements.append(self.map_stmt(i))
+        statements = [self.map_stmt(i) for i in node.body]
+        # If we have multiple statements, and the last statement is a return, then we will need to slice the tuple that represents the results of the
+        # lambda function we're inserting. This is necessary because lambda functions return the result of the expression inside of them. Because we're
+        # representing the entire function body as a tuple, normally it would just return the tuple.
         if ast.Return is type(statements[-1]):
             if len(statements) > 1:
                 statements[-1] = self.map_stmt(statements[-1].value)
-                return ast.Subscript(
-                    ast.Tuple(elts=statements, ctx=ast.Load()),
-                    slice=ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=1)),
-                    ctx=ast.Load(),
-                )
-            else:
-                return statements[-1].value
-        return ast.Tuple(elts=statements, ctx=ast.Load())
 
-    def visit_FunctionDef(self, node):
+            else:
+                # If there is only one statement, and it's a return, we don't need the subscript.
+                return statements[-1].value
+        else:
+            # If there isn't a return at the end, we need to return None.
+            statements.append(ast.Constant(value=None))
+        return ast.Subscript(
+            ast.Tuple(elts=statements,ctx=ast.Load()),
+            slice=ast.UnaryOp(op=ast.USub(),operand=ast.Constant(value=1)),
+            ctx=ast.Load(),
+        )
+    def visit_ClassDef(self, node):
+        class_body_dict = {}
+        for subnode in node.body:
+            if isinstance(subnode, ast.FunctionDef):
+                class_body_dict[subnode.name] = self.visit_FunctionDef(subnode, class_def=True)
+            elif isinstance(subnode, ast.Assign):
+                for target in subnode.targets:
+                    class_body_dict[target.id] = subnode.value
+        class_body = ast.Dict(keys=[ast.Constant(value=k) for k in class_body_dict.keys()], values=[v for v in class_body_dict.values()])
+        return ast.NamedExpr(
+            target=ast.Name(id=node.name,ctx=ast.Store()),
+            value=ast.Call(
+                func=ast.Name(id="type",ctx=ast.Load()),
+                args=[ast.Constant(value=node.name), ast.Tuple(elts=[], ctx=ast.Load()), class_body],
+                keywords=[],
+            ),
+        )
+    def visit_FunctionDef(self, node, class_def=False):
         # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
         if self.top_level_funcdef:
             self.top_level_funcdef = False
@@ -151,7 +174,10 @@ class StatementMapper(ast.NodeTransformer):
             )
         else:
             function_body = self.map_body(node)
+            lambda_func = ast.Lambda(args=node.args, body=function_body)
+            if class_def:
+                return lambda_func
             return ast.NamedExpr(
                 target=ast.Name(id=node.name, ctx=ast.Store()),
-                value=ast.Lambda(args=node.args, body=function_body),
+                value=lambda_func,
             )
