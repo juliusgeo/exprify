@@ -27,6 +27,18 @@ def while_function():
             x = 0
     return x
 
+def nested_func():
+    def sum(a, b):
+        def add1(b):
+            return b + 1
+        return a + add1(b)
+    x = 0
+    s = 0
+    while x < 15:
+        x = sum(x, 3)
+        s = sum(s, x)
+    return s
+
 import unittest
 
 class TestTranspile(unittest.TestCase):
@@ -41,8 +53,11 @@ class TestTranspile(unittest.TestCase):
         b=transpiled_function_object(while_function,debug=True)()
         assert a == b
 
+    def test_nested(self):
+        a = nested_func()
+        b = transpiled_function_object(nested_func, debug=True)()
+        assert a == b, f"{a} != {b}"
 
 
 if __name__ == '__main__':
     unittest.main()
-
