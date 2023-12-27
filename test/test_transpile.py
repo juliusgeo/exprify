@@ -1,5 +1,5 @@
-from ..src.transpile import transpiled_function_object
-import unittest
+from exprify import transpiled_function_object
+import pytest
 
 
 def basic_function():
@@ -83,43 +83,18 @@ def multiple_returns(a):
         return 0
 
 
-class TestTranspile(unittest.TestCase):
-    def test_basic(self):
-        a = basic_function()
-        b = transpiled_function_object(basic_function, debug=True)()
-        assert a == b, f"{a} != {b}"
-
-    def test_while(self):
-        a = while_function()
-        b = transpiled_function_object(while_function, debug=True)()
-        assert a == b, f"{a} != {b}"
-
-    def test_nested(self):
-        a = nested_func()
-        b = transpiled_function_object(nested_func, debug=True)()
-        assert a == b, f"{a} != {b}"
-
-    def test_imports(self):
-        a = func_with_imports()
-        b = transpiled_function_object(func_with_imports, debug=True)()
-        assert a == b, f"{a} != {b}"
-
-    def test_class(self):
-        a = class_func()
-        b = transpiled_function_object(class_func, debug=True)()
-        assert a == b, f"{a} != {b}"
-
-    def test_multiple_returns(self):
-        a = multiple_returns(1)
-        b = transpiled_function_object(multiple_returns, debug=True)(1)
-        assert a == b, f"{a} != {b}"
-        a = multiple_returns(-1)
-        b = transpiled_function_object(multiple_returns, debug=True)(-1)
-        assert a == b, f"{a} != {b}"
-        a = multiple_returns(0)
-        b = transpiled_function_object(multiple_returns, debug=True)(0)
-        assert a == b, f"{a} != {b}"
+@pytest.mark.parametrize(
+    "func", [basic_function, while_function, nested_func, func_with_imports, class_func]
+)
+def test_func_no_args(func):
+    a = func()
+    b = transpiled_function_object(func, debug=True)()
+    assert a == b, f"{a} != {b}"
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize("func, args", [(multiple_returns, (1, -1, 0))])
+def test_func_args(func, args):
+    for arg in args:
+        a = multiple_returns(arg)
+        b = transpiled_function_object(multiple_returns, debug=True)(arg)
+        assert a == b, f"{a} != {b}"
