@@ -1,4 +1,5 @@
 from ..src.transpile import transpiled_function_object
+import unittest
 
 
 def basic_function():
@@ -45,7 +46,7 @@ def nested_func():
 
 
 def func_with_imports():
-    import itertools, functools
+    import itertools
     from functools import reduce
 
     x = 0
@@ -55,11 +56,15 @@ def func_with_imports():
         s += x + reduce(lambda a, b: a + b, [1, 2, 3])
     return s
 
+
 def class_func():
     class A:
         x = y = 0
+
         def __init__(self, x):
             self.x = x
+            return None
+
         def add(self):
             self.x += 1
 
@@ -68,7 +73,16 @@ def class_func():
         x.add()
     return x.x
 
-import unittest
+
+def multiple_returns(a):
+    if a > 0:
+        return a
+    elif a < 0:
+        return abs(a)
+    else:
+        return 0
+
+
 
 
 class TestTranspile(unittest.TestCase):
@@ -96,6 +110,18 @@ class TestTranspile(unittest.TestCase):
         a = class_func()
         b = transpiled_function_object(class_func, debug=True)()
         assert a == b, f"{a} != {b}"
+
+    def test_multiple_returns(self):
+        a = multiple_returns(1)
+        b = transpiled_function_object(multiple_returns, debug=True)(1)
+        assert a == b, f"{a} != {b}"
+        a = multiple_returns(-1)
+        b = transpiled_function_object(multiple_returns, debug=True)(-1)
+        assert a == b, f"{a} != {b}"
+        a = multiple_returns(0)
+        b = transpiled_function_object(multiple_returns, debug=True)(0)
+        assert a == b, f"{a} != {b}"
+
 
 if __name__ == "__main__":
     unittest.main()
