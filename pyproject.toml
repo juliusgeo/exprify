@@ -13,7 +13,7 @@ maintainers = [
   {name = "Julius Park", email = "juliusgeo@gmail.com"},
 ]
 description = "Translates Python programs using statements into expressions"
-readme = "README.rst"
+readme = "README.md"
 license = {file = "LICENSE.txt"}
 keywords = ["expressions", "transpiler", "list comprehension"]
 classifiers = [

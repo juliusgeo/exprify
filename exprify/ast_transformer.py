@@ -1,4 +1,5 @@
 import ast
+import uuid
 
 
 class StatementMapper(ast.NodeTransformer):
@@ -8,7 +9,7 @@ class StatementMapper(ast.NodeTransformer):
         return ast.IfExp(
             test=node.test,
             body=self.map_body(node),
-            orelse=self.map_stmt(node.orelse[0]),
+            orelse=self.map_body(node.orelse),
         )
 
     def visit_AugAssign(self, node):
@@ -62,19 +63,35 @@ class StatementMapper(ast.NodeTransformer):
         return ast.Tuple(elts=imps, ctx=ast.Load())
 
     def visit_Assign(self, node):
-        if len(node.targets) == 1:
-            return ast.NamedExpr(target=node.targets[0], value=node.value)
-        targets = []
-        for target in node.targets:
-            targets.append(ast.NamedExpr(target=target, value=node.value))
-        return ast.Tuple(elts=targets, ctx=ast.Load())
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Tuple):
+            intermediate_name = f"interm_{uuid.uuid4()}"
+            intermediate = ast.NamedExpr(
+                target=ast.Name(id=intermediate_name, ctx=ast.Store()), value=node.value
+            )
+            targets = [intermediate]
+            for index, target in enumerate(node.targets[0].elts):
+                targets.append(
+                    ast.NamedExpr(
+                        target=target,
+                        value=ast.Subscript(
+                            ast.Name(id=intermediate_name, ctx=ast.Load()),
+                            slice=ast.Constant(value=index),
+                            ctx=ast.Load(),
+                        ),
+                    )
+                )
+        else:
+            targets = []
+            for target in node.targets:
+                targets.append(ast.NamedExpr(target=target, value=node.value))
+        return ast.List(elts=targets, ctx=ast.Load())
 
     def visit_For(self, node):
         return ast.ListComp(
             elt=self.map_body(node),
             generators=[
                 ast.comprehension(
-                    target=ast.Name(id="_", ctx=ast.Store()),
+                    target=node.target,
                     iter=node.iter,
                     is_async=False,
                     ifs=[],
@@ -125,18 +142,30 @@ class StatementMapper(ast.NodeTransformer):
 
     def map_stmt(self, node):
         if isinstance(node, list):
-            return ast.Tuple(elts=[self.map_stmt(j) for j in node], ctx=ast.Load())
+            return ast.List(elts=[self.map_stmt(j) for j in node], ctx=ast.Load())
         return self.visit(node)
 
     def map_body(self, node):
-        statements = [self.map_stmt(i) for i in node.body]
-        # if ast.Return not in [type(i) for i in node.body]:
-        #     statements.append(ast.Constant(value=None))
+        # Convert the bodies of functions/if statements to tuples with expressions inside.
+        # Because lambda functions always return the entirety of the expression inside them, because we are getting a tuple
+        # of the statements converted into expressions, we need to index into the last element so that it returns the result
+        # rather than the whole tuple.
+
+        # If node is from an If-orelse, it will be a list, not a node with a body.
+        body = node if isinstance(node, list) else node.body
+        statements = [self.map_stmt(i) for i in body]
+
+        # If there's nothing in the body, return None.
+        if not statements:
+            return ast.Constant(value=None)
+
+        # If there's only one expression in the body, just return that. Otherwise, return a tuple
+        # indexed to the last element so that the lambda func returns the last value.
         if len(statements) == 1:
             return statements[0]
         else:
             return ast.Subscript(
-                ast.Tuple(elts=statements, ctx=ast.Load()),
+                ast.List(elts=statements, ctx=ast.Load()),
                 slice=ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=1)),
                 ctx=ast.Load(),
             )
@@ -169,6 +198,8 @@ class StatementMapper(ast.NodeTransformer):
         )
 
     def visit_FunctionDef(self, node, class_def=False):
+        for arg in node.args.args:
+            arg.annotation = None
         # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
         if self.top_level_funcdef:
             self.top_level_funcdef = False
