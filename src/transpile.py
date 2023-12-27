@@ -1,4 +1,5 @@
-import ast, inspect
+import ast
+import inspect
 
 from .ast_transformer import StatementMapper
 
