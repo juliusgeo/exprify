@@ -64,7 +64,6 @@ def class_func():
 
         def __init__(self, x):
             self.x = x
-            return None
 
         def add(self):
             self.x += 1

@@ -68,5 +68,4 @@ This project is the missing link in the middle, hopefully allowing for a pipelin
 ### Limitations
 
 - Does not support error handling
-- Functions which return `None` implicitly need to have an explicit `return None`
 - Does not support `async`
