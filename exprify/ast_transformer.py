@@ -12,7 +12,49 @@ class StatementMapper(ast.NodeTransformer):
             orelse=self.map_body(node.orelse),
         )
 
+    def visit_With(self, node):
+        # For each of the context managers, we need to prepend and append the __enter__ and __exit__ calls, respectively.
+        enters = []
+        for ctx_manager in node.items:
+            c = ast.Call(
+                func=ast.Name(id="getattr", ctx=ast.Load()),
+                args=[ctx_manager.context_expr, ast.Constant(value="__enter__")],
+                keywords=[],
+            )
+            if ctx_manager.optional_vars:
+                enters.append(
+                    ast.NamedExpr(
+                        target=ctx_manager.optional_vars,
+                        value=ast.Call(func=c, args=[], keywords=[]),
+                    )
+                )
+            else:
+                enters.append(ctx_manager.context_expr)
+        exits = []
+        for ctx_manager in node.items:
+            exits.append(
+                ast.Call(
+                    func=ast.Call(
+                        func=ast.Name(id="getattr", ctx=ast.Load()),
+                        args=[ctx_manager.context_expr, ast.Constant(value="__exit__")],
+                        keywords=[],
+                    ),
+                    args=[],
+                    keywords=[],
+                )
+            )
+        # We don't want to be returning any of the exits, so index the body tuple so we just get the values
+        # from self.map_body
+        return ast.Subscript(
+            value=ast.Tuple(
+                elts=enters + [self.map_body(node)] + exits, ctx=ast.Load()
+            ),
+            slice=ast.Constant(value=len(enters)),
+            ctx=ast.Load(),
+        )
+
     def visit_AugAssign(self, node):
+        # Target can either be a name, or a class attribute
         if isinstance(node.target, ast.Name):
             target_load = ast.Name(id=node.target.id, ctx=ast.Load())
         elif isinstance(node.target, ast.Attribute):
@@ -25,6 +67,7 @@ class StatementMapper(ast.NodeTransformer):
         )
 
     def visit_ImportFrom(self, node):
+        # Replace from library import function with getattr(__import__(library), function) calls
         imps = []
         module = ast.Call(
             func=ast.Name(id="__import__", ctx=ast.Load()),

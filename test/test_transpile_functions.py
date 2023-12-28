@@ -3,7 +3,7 @@ import pytest
 from exprify import transpiled_function_object
 
 
-def basic_function():
+def basic_func():
     x = 0
     for i in range(10):
         if x < 5:
@@ -17,7 +17,7 @@ def basic_function():
     return x
 
 
-def while_function():
+def while_func():
     x = 0
     while x < 15:
         if x < 5:
@@ -46,7 +46,7 @@ def nested_func():
     return s
 
 
-def func_with_imports():
+def imports_func():
     import itertools
     from functools import reduce
 
@@ -75,7 +75,7 @@ def class_func():
     return x.x
 
 
-def multiple_returns(a):
+def multiple_returns_func(a):
     if a > 0:
         return a
     elif a < 0:
@@ -84,7 +84,7 @@ def multiple_returns(a):
         return 0
 
 
-def tuple_unpacking():
+def tuple_unpacking_func():
     x, y = 0, 1
     for i, j in zip(range(10), range(20)):
         x += i
@@ -92,15 +92,21 @@ def tuple_unpacking():
     return x, y
 
 
+def context_manager_func():
+    with open("test_scripts/zipy.py") as f, open("test_scripts/zipy.py") as g:
+        return f.read() + str(len(g.readlines()))
+
+
 @pytest.mark.parametrize(
     "func",
     [
-        basic_function,
-        while_function,
+        basic_func,
+        while_func,
         nested_func,
-        func_with_imports,
+        imports_func,
         class_func,
-        tuple_unpacking,
+        tuple_unpacking_func,
+        context_manager_func,
     ],
 )
 def test_func_no_args(func):
@@ -109,9 +115,9 @@ def test_func_no_args(func):
     assert a == b, f"{a} != {b}"
 
 
-@pytest.mark.parametrize("func, args", [(multiple_returns, (1, -1, 0))])
+@pytest.mark.parametrize("func, args", [(multiple_returns_func, (1, -1, 0))])
 def test_func_args(func, args):
     for arg in args:
-        a = multiple_returns(arg)
-        b = transpiled_function_object(multiple_returns, debug=True)(arg)
+        a = func(arg)
+        b = transpiled_function_object(func, debug=True)(arg)
         assert a == b, f"{a} != {b}"
