@@ -25,3 +25,18 @@ def transpiled_function_ast(func, debug=False):
         src = ast.unparse(a)
         print(src)
     return a, src
+
+
+def transpiled_script(filename):
+    with open(filename, "r") as f:
+        src = f.read()
+        mapper = StatementMapper()
+        print(type(ast.parse(src)))
+        a = mapper.generic_visit(ast.parse(src))
+        a.body = [ast.Expr(value=node) for node in a.body]
+        a = ast.fix_missing_locations(a)
+        print(ast.unparse(a))
+        compiled_ast = compile(ast.unparse(a), filename="", mode="exec")
+        namespace = {}
+        exec(compiled_ast, namespace)
+        return a

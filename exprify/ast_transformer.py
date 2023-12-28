@@ -63,23 +63,27 @@ class StatementMapper(ast.NodeTransformer):
         return ast.Tuple(elts=imps, ctx=ast.Load())
 
     def visit_Assign(self, node):
-        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Tuple):
-            intermediate_name = f"interm_{uuid.uuid4()}"
-            intermediate = ast.NamedExpr(
-                target=ast.Name(id=intermediate_name, ctx=ast.Store()), value=node.value
-            )
-            targets = [intermediate]
-            for index, target in enumerate(node.targets[0].elts):
-                targets.append(
-                    ast.NamedExpr(
-                        target=target,
-                        value=ast.Subscript(
-                            ast.Name(id=intermediate_name, ctx=ast.Load()),
-                            slice=ast.Constant(value=index),
-                            ctx=ast.Load(),
-                        ),
-                    )
+        if len(node.targets) == 1:
+            if isinstance(node.targets[0], ast.Tuple):
+                intermediate_name = f"interm_{'_'.join(str(uuid.uuid4()).split('-'))}"
+                intermediate = ast.NamedExpr(
+                    target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+                    value=node.value,
                 )
+                targets = [intermediate]
+                for index, target in enumerate(node.targets[0].elts):
+                    targets.append(
+                        ast.NamedExpr(
+                            target=target,
+                            value=ast.Subscript(
+                                ast.Name(id=intermediate_name, ctx=ast.Load()),
+                                slice=ast.Constant(value=index),
+                                ctx=ast.Load(),
+                            ),
+                        )
+                    )
+            else:
+                return ast.NamedExpr(target=node.targets[0], value=node.value)
         else:
             targets = []
             for target in node.targets:
