@@ -61,6 +61,16 @@ class StatementMapper(ast.NodeTransformer):
             target_load = ast.Attribute(
                 value=node.target.value, attr=node.target.attr, ctx=ast.Load()
             )
+            return ast.Call(
+                func=ast.Name(id="setattr", ctx=ast.Load()),
+                args=[
+                    node.target.value,
+                    ast.Constant(value=node.target.attr),
+                    ast.BinOp(left=target_load, op=node.op, right=node.value),
+                ],
+                keywords=[],
+            )
+
         return ast.NamedExpr(
             target=node.target,
             value=ast.BinOp(left=target_load, op=node.op, right=node.value),
@@ -126,7 +136,18 @@ class StatementMapper(ast.NodeTransformer):
                         )
                     )
             else:
-                return ast.NamedExpr(target=node.targets[0], value=node.value)
+                if isinstance(node.targets[0], ast.Name):
+                    return ast.NamedExpr(target=node.targets[0], value=node.value)
+                elif isinstance(node.targets[0], ast.Attribute):
+                    return ast.Call(
+                        func=ast.Name(id="setattr", ctx=ast.Load()),
+                        args=[
+                            node.targets[0].value,
+                            ast.Constant(value=node.targets[0].attr),
+                            node.value,
+                        ],
+                        keywords=[],
+                    )
         else:
             targets = []
             for target in node.targets:

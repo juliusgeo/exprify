@@ -5,7 +5,7 @@ from .ast_transformer import StatementMapper
 
 
 def transpiled_function_object(func, debug=False):
-    a = transpiled_function_ast(func, debug)[0]
+    a = transpiled_function_ast(func, debug)
     namespace = {}
     compiled_ast = compile(a, filename="", mode="exec")
     exec(compiled_ast, namespace)
@@ -22,21 +22,18 @@ def transpiled_function_ast(func, debug=False):
         gen = ast.dump(a, indent=1)
         print("Reference:\n", ref)
         print("Generated:\n", gen)
-        src = ast.unparse(a)
         print(src)
-    return a, src
+    return ast.unparse(a)
 
 
 def transpiled_script(filename):
     with open(filename, "r") as f:
         src = f.read()
         mapper = StatementMapper()
-        print(type(ast.parse(src)))
         a = mapper.generic_visit(ast.parse(src))
         a.body = [ast.Expr(value=node) for node in a.body]
         a = ast.fix_missing_locations(a)
-        print(ast.unparse(a))
         compiled_ast = compile(ast.unparse(a), filename="", mode="exec")
         namespace = {}
         exec(compiled_ast, namespace)
-        return a
+        return ast.unparse(a)

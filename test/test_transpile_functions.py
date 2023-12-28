@@ -68,6 +68,7 @@ def class_func():
 
         def add(self):
             self.x += 1
+            self.y = self.x
 
     x = A(0)
     for i in range(10):
@@ -92,6 +93,19 @@ def tuple_unpacking_func():
     return x, y
 
 
+def readme_example_func():
+    class A:
+        def __init__(self, a):
+            self.a = a
+
+        def __add__(self, other):
+            return self.a + other.a
+
+    a = A(1)
+    b = A(2)
+    return a + b
+
+
 def context_manager_func():
     with open("test_scripts/zipy.py") as f, open("test_scripts/zipy.py") as g:
         return f.read() + str(len(g.readlines()))
@@ -107,6 +121,7 @@ def context_manager_func():
         class_func,
         tuple_unpacking_func,
         context_manager_func,
+        readme_example_func,
     ],
 )
 def test_func_no_args(func):

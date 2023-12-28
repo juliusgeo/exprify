@@ -236,9 +236,8 @@ def string_to_zip(filename: str, strk: str) -> None:
 
     # Concatenate all pieces to form the ZIP file content
     zip_content = local_header + bitstream_bytes + cd_header + end_of_cd_record
-    f = open("sample.zip", "wb")
-    f.write(zip_content)
-    f.close()
+    with open("sample.zip", "wb") as f:
+        f.write(zip_content)
 
 
 uncompressed_string = """"Did you win your sword fight?"
@@ -246,6 +245,7 @@ uncompressed_string = """"Did you win your sword fight?"
             "And you wrote the software."
             "Yeah. That, too," Hiro says.",
         """
+
 
 string_to_zip(
     "sample.txt",
@@ -256,4 +256,3 @@ z = zipfile.ZipFile(f)
 assert z.namelist() == ["sample.txt"]
 assert z.read("sample.txt") == uncompressed_string.encode("ascii")
 remove("sample.zip")
-f.close()
