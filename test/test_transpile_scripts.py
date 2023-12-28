@@ -15,4 +15,4 @@ SCRIPTS_PATH = "test_scripts"
     ],
 )
 def test_transform_scripts(filename):
-    transpiled_script(filename)
+    print(transpiled_script(filename))

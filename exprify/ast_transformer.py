@@ -3,7 +3,7 @@ import uuid
 
 
 class StatementMapper(ast.NodeTransformer):
-    top_level_funcdef = True
+    top_level = True
 
     def visit_If(self, node):
         return ast.IfExp(
@@ -95,8 +95,10 @@ class StatementMapper(ast.NodeTransformer):
                     ),
                 )
             )
-
-        return ast.Tuple(elts=imps, ctx=ast.Load())
+        if len(imps) > 1:
+            return ast.Tuple(elts=imps, ctx=ast.Load())
+        else:
+            return ast.Expr(value=imps[0])
 
     def visit_Import(self, node):
         # Replace imports with __import__ calls
@@ -113,9 +115,14 @@ class StatementMapper(ast.NodeTransformer):
                 )
             )
 
-        return ast.Tuple(elts=imps, ctx=ast.Load())
+        if len(imps) > 1:
+            return ast.Tuple(elts=imps, ctx=ast.Load())
+        else:
+            return ast.Expr(value=imps[0])
 
     def visit_Assign(self, node):
+        if self.top_level:
+            return node
         if len(node.targets) == 1:
             if isinstance(node.targets[0], ast.Tuple):
                 intermediate_name = f"interm_{'_'.join(str(uuid.uuid4()).split('-'))}"
@@ -266,12 +273,14 @@ class StatementMapper(ast.NodeTransformer):
         )
 
     def visit_FunctionDef(self, node, class_def=False):
+        # Remove type annotations
         for arg in node.args.args:
             arg.annotation = None
         # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
-        if self.top_level_funcdef:
-            self.top_level_funcdef = False
+        if self.top_level:
+            self.top_level = False
             function_body = self.map_body(node)
+            self.top_level = True
             return ast.Assign(
                 targets=[ast.Name(id=node.name, ctx=ast.Store())],
                 value=ast.Lambda(args=node.args, body=function_body),

@@ -32,16 +32,16 @@ def while_func():
 
 
 def nested_func():
-    def sum(a, b):
+    def sum(a, b, c=1):
         def add1(b):
             return b + 1
 
-        return a + add1(b)
+        return a + add1(b) + c
 
     x = 0
     s = 0
     while x < 15:
-        x = sum(x, 3)
+        x = sum(x, 3, c=2)
         s = sum(s, x)
     return s
 
