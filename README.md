@@ -64,6 +64,25 @@ You can see now why it might be preferable to write in the first form, rather th
 For my [previous obfuscated projects](https://gist.github.com/juliusgeo/0eb005a67f4b772b2b2b8ef54e00b509), I would do this conversion by hand, and then
 use my [other project](https://github.com/juliusgeo/pyflate) which re-flows code written in the expression syntax into ASCII art to produce the final result.
 This project is the missing link in the middle, hopefully allowing for a pipeline that transforms Python code from normal syntax -> expression only syntax -> minified or obfuscated result.
+### How it works
+
+Most of the tricks used here are described in a [wonderful article](https://qiita.com/KTakahiro1729/items/c9cb757473de50652374) by KTakahiro1729 (in Japanese).
+This package automates the process of conversion, and introduces a few new tricks for other language constructs.
+
+`while` loops are converted into list comprehensions with a hacky use of `iter` to control the loop.
+```python
+x = 0
+while x < 5:
+    x += 1
+```
+Is converted to:
+```python
+(x:=0, [(x:=x+1) for _ in iter(lambda: x < 5, False)])
+```
+The lambda function calculates the condition, and the iter continues to produce True until the sentinel value (2nd argument) is encountered.
+
+`with` statements are converted very similarly to any other block of statements, but calls to `__enter__` and `__exit__` are added before and after the body, with additional NamedExpressions if the context managers are bound to variables.
+
 
 ### Limitations
 
