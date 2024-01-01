@@ -6,6 +6,7 @@ from .ast_transformer import StatementMapper
 
 def transpiled_function_object(func, debug=False):
     a = transpiled_function_ast(func, debug)
+    print(a)
     namespace = {}
     compiled_ast = compile(a, filename="", mode="exec")
     exec(compiled_ast, namespace)

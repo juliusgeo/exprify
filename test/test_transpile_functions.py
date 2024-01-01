@@ -105,6 +105,16 @@ def readme_example_func():
     return a + b
 
 
+def recursive_func():
+    def f(x):
+        if x > 0:
+            return f(x - 1)
+        else:
+            return 0
+
+    return f(10)
+
+
 def context_manager_func():
     with open("test_scripts/zipy.py") as f, open("test_scripts/zipy.py") as g:
         return f.read() + str(len(g.readlines()))
@@ -121,6 +131,7 @@ def context_manager_func():
         tuple_unpacking_func,
         context_manager_func,
         readme_example_func,
+        recursive_func,
     ],
 )
 def test_func_no_args(func):
