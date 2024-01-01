@@ -30,11 +30,15 @@ def transpiled_function_ast(func, debug=False):
 def transpiled_script(filename):
     with open(filename, "r") as f:
         src = f.read()
-        mapper = StatementMapper()
-        a = mapper.generic_visit(ast.parse(src))
-        a.body = [ast.Expr(value=node) for node in a.body]
-        a = ast.fix_missing_locations(a)
-        compiled_ast = compile(ast.unparse(a), filename="", mode="exec")
-        namespace = {}
-        exec(compiled_ast, namespace)
-        return ast.unparse(a)
+    return transpile_script_source(src)
+
+
+def transpile_script_source(src):
+    mapper = StatementMapper()
+    a = mapper.generic_visit(ast.parse(src))
+    a.body = [ast.Expr(value=node) for node in a.body]
+    a = ast.fix_missing_locations(a)
+    compiled_ast = compile(ast.unparse(a), filename="", mode="exec")
+    namespace = {}
+    exec(compiled_ast, namespace)
+    return ast.unparse(a)

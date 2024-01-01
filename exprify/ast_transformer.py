@@ -1,5 +1,7 @@
 import ast
-import uuid
+import itertools
+
+intermediate_gen = itertools.count(1)
 
 
 class StatementMapper(ast.NodeTransformer):
@@ -125,7 +127,7 @@ class StatementMapper(ast.NodeTransformer):
             return node
         if len(node.targets) == 1:
             if isinstance(node.targets[0], ast.Tuple):
-                intermediate_name = f"interm_{'_'.join(str(uuid.uuid4()).split('-'))}"
+                intermediate_name = f"inter{next(intermediate_gen)}"
                 intermediate = ast.NamedExpr(
                     target=ast.Name(id=intermediate_name, ctx=ast.Store()),
                     value=node.value,
@@ -294,3 +296,7 @@ class StatementMapper(ast.NodeTransformer):
                 target=ast.Name(id=node.name, ctx=ast.Store()),
                 value=lambda_func,
             )
+
+    def generic_visit(self, node):
+        if node:
+            return super().generic_visit(node)
