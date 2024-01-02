@@ -1,77 +1,114 @@
+from collections import namedtuple
+
 from exprify import transpile_script_source
 from itertools import groupby
-from collections import namedtuple
 from keyword import iskeyword
-from tokenize import NEWLINE, NL, NAME, STRING, tokenize
+from tokenize import NAME, STRING, tokenize
+import tokenize as tk
 import io
 import python_minifier
 
 
-ns = ["(\n);"]
-app, tol = ns.append, 6
+tol = 4
 attr = getattr
+# We only need these attributes from the Token namedtuples defined in the tokenize module
+Token = namedtuple("Token", ["string", "type"])
 
 
 def reflow(script, outline):
+    # Transpile and THEN minify the script (doesn't work the other way for some reason).
+    # Can't rename locals because python_minifier doesn't like the weird scoping of using lambdas everywhere.
     with open(script, "r") as f:
-        script = transpile_script_source(f.read())
+        script = f.read()
         script = python_minifier.minify(
             script,
-            rename_locals=False,
+            rename_locals=True,
             rename_globals=True,
             hoist_literals=True,
             remove_annotations=True,
         )
-    old, *token_list = tokenize(io.BytesIO(bytes(script, "utf-8")).readline)
-    tok_lt = {
-        NEWLINE: lambda z, v: app(";") if ns[-1] != ";" else None,
-        NL: lambda z, v: app("") if ns[-1] != ";" else None,
-    }
-    toktup = namedtuple("t", ["string", "type"])
+        script = transpile_script_source(script)
+
+    old, *token_list = [
+        Token(tok.string, tok.type)
+        for tok in tokenize(io.BytesIO(bytes(script, "utf-8")).readline)
+    ]
 
     def partition_token(tok, space):
         ts = "".join(tok.string.split(" "))
-        splpt = ts.find(".") if tok.type == NAME else space - tol
-        septok = "" if tok.type == NAME else '"'
-        return toktup(string=ts[:splpt] + septok, type=tok.type), toktup(
-            string=('"' if tok.type == STRING else "") + ts[splpt:], type=tok.type
+        splpt = ts.find(".") if tok.type == NAME else space
+        septok = "" if tok.type == NAME else "'"
+        return Token(string=ts[:splpt] + septok, type=tok.type), Token(
+            string=septok + ts[splpt:], type=tok.type
         )
 
-    for line in open(outline).readlines():
-        t_buf = 0
-        for sp, gr in groupby(line, key=str.isspace):
-            if sp:
-                app("".join(list(gr)[t_buf:]))
-            else:
-                # print(list(gr)[t_buf:])
-                space = len(list(gr)[t_buf:])
-                for i in range(min(space, len(token_list))):
-                    b = len(" ".join(token_list[0].string.split())) - tol
-                    if space >= b:
-                        t_buf = -1 * b
-                        tok = token_list.pop(0)
-                        tok1, tok2 = partition_token(tok, space)
-                        if tok.type in (NAME, STRING) and (
-                            "." in tok.string and len(tok.string) >= space
-                        ):
-                            cs = tok1.string
-                            if len(tok2.string) > 0 or "." in tok.string:
-                                token_list.insert(0, tok2)
-                        else:
-                            cs = " ".join(tok.string.split())
-                        cur_len = len(cs)
-                        tok_lt.get(
-                            tok.type,
-                            lambda tok, old: app(" " + cs)
-                            if iskeyword(cs) or (old.type == NAME and tok.type == NAME)
-                            else app(cs),
-                        )(tok, old)
-                        old = tok
-                        space = space - cur_len
-        if token_list:
-            ns.append(ns.pop(-1).strip() + "\\\n")
-        if any(isinstance(i, tuple) for i in ns):
-            print(ns)
-            break
+    new_lines = ["(\n);"]
 
-    return "".join(ns)
+    def generate_whitespace_groups(line):
+        # If there is a whitespace group that is a small size, then merge it into the previous non whitespace group
+        groups = []
+        for is_space, group in groupby(line, key=str.isspace):
+            group_size = len(list(group))
+            if groups and is_space and group_size <= 2:
+                prev_sp, prev_size = groups.pop(-1)
+                groups.append((prev_sp, group_size + prev_size))
+            else:
+                groups.append((is_space, group_size))
+        return groups
+
+    for line in open(outline).readlines():
+        cur_line = ""
+        carry_over = 0
+        for is_whitespace, num_chars in generate_whitespace_groups(line):
+            if is_whitespace and token_list:
+                cur_line += " " * (num_chars + carry_over)
+            else:
+                space = num_chars
+                while space > 0:
+                    if not token_list:
+                        break
+                    if len(token_list[0].string.strip()) > space + tol:
+                        if token_list[0].type in (STRING, NAME):
+                            if (
+                                token_list[0].type == NAME
+                                and "." not in token_list[0].string
+                            ):
+                                break
+                            # If the string is too long, split it up
+                            left, right = partition_token(token_list.pop(0), space)
+                            token_list.insert(0, right)
+                            cur_token = left
+                        else:
+                            break
+                    else:
+                        cur_token = token_list.pop(0)
+                    tok_str = cur_token.string.strip()
+                    match cur_token.type:
+                        case tk.NEWLINE:
+                            tok_str = tok_str + ";"
+                        case tk.NL:
+                            tok_str = ""
+                        case _:
+                            # Need to add a space between NAMES and (keywords or NAMES)
+                            if (
+                                (
+                                    (iskeyword(tok_str) or cur_token.type == NAME)
+                                    and old.type == NAME
+                                )
+                                and cur_line
+                                and not cur_line[-1].isspace()
+                            ):
+                                tok_str = " " + tok_str
+                    old = cur_token
+                    space -= len(tok_str)
+                    cur_line += tok_str
+                if space < 0:
+                    carry_over = space
+                else:
+                    carry_over = 0
+                cur_line += " " * space
+        if len(token_list) > 1:
+            cur_line = cur_line + "\\\n"
+        if cur_line:
+            new_lines.append(cur_line)
+    return "".join(new_lines)
