@@ -29,7 +29,7 @@ def reflow(script, outline):
         script = transpile_script_source(script)
 
     old, *token_list = [
-        Token(tok.string, tok.type)
+        Token(tok.string.strip(), tok.type)
         for tok in tokenize(io.BytesIO(bytes(script, "utf-8")).readline)
     ]
 
@@ -48,18 +48,19 @@ def reflow(script, outline):
         groups = []
         for is_space, group in groupby(line, key=str.isspace):
             group_size = len(list(group))
-            if groups and is_space and group_size <= 2:
-                prev_sp, prev_size = groups.pop(-1)
-                groups.append((prev_sp, group_size + prev_size))
-            else:
-                groups.append((is_space, group_size))
+            # if groups and is_space and group_size <= 2:
+            #     prev_sp, prev_size = groups.pop(-1)
+            #     groups.append((prev_sp, group_size + prev_size))
+            # else:
+            groups.append((is_space, group_size))
         return groups
 
     for line in open(outline).readlines():
+        line = line.rstrip()
         cur_line = ""
         carry_over = 0
         for is_whitespace, num_chars in generate_whitespace_groups(line):
-            if is_whitespace and token_list:
+            if is_whitespace:
                 cur_line += " " * (num_chars + carry_over)
             else:
                 space = num_chars
@@ -67,7 +68,11 @@ def reflow(script, outline):
                     if not token_list:
                         break
                     if len(token_list[0].string.strip()) > space + TOLERANCE:
-                        if token_list[0].type in (STRING, NAME):
+                        # In Python 3.12, should be able to detect fstrings better
+                        if (
+                            token_list[0].type in (STRING, NAME)
+                            and "f'" not in token_list[0].string
+                        ):
                             # We can't split NAMEs if they don't have a dot in them
                             if (
                                 token_list[0].type == NAME
@@ -104,7 +109,7 @@ def reflow(script, outline):
                     space -= len(tok_str)
                     cur_line += tok_str
                 carry_over = space
-        if len(token_list) > 1:
+        if len(token_list) > 0:
             cur_line = cur_line + "\\\n"
         if cur_line:
             new_lines.append(cur_line)
