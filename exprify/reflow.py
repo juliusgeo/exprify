@@ -9,8 +9,7 @@ import io
 import python_minifier
 
 
-tol = 4
-attr = getattr
+TOLERANCE = 4
 # We only need these attributes from the Token namedtuples defined in the tokenize module
 Token = namedtuple("Token", ["string", "type"])
 
@@ -67,8 +66,9 @@ def reflow(script, outline):
                 while space > 0:
                     if not token_list:
                         break
-                    if len(token_list[0].string.strip()) > space + tol:
+                    if len(token_list[0].string.strip()) > space + TOLERANCE:
                         if token_list[0].type in (STRING, NAME):
+                            # We can't split NAMEs if they don't have a dot in them
                             if (
                                 token_list[0].type == NAME
                                 and "." not in token_list[0].string
@@ -79,6 +79,7 @@ def reflow(script, outline):
                             token_list.insert(0, right)
                             cur_token = left
                         else:
+                            # We can't resize, so continue to the next group :(
                             break
                     else:
                         cur_token = token_list.pop(0)
@@ -102,11 +103,7 @@ def reflow(script, outline):
                     old = cur_token
                     space -= len(tok_str)
                     cur_line += tok_str
-                if space < 0:
-                    carry_over = space
-                else:
-                    carry_over = 0
-                cur_line += " " * space
+                carry_over = space
         if len(token_list) > 1:
             cur_line = cur_line + "\\\n"
         if cur_line:
