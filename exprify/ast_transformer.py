@@ -87,9 +87,10 @@ class StatementMapper(ast.NodeTransformer):
             keywords=[],
         )
         for name in node.names:
+            as_name = name.asname if name.asname else name.name
             imps.append(
                 ast.NamedExpr(
-                    target=ast.Name(id=name.name, ctx=ast.Store()),
+                    target=ast.Name(id=as_name, ctx=ast.Store()),
                     value=ast.Call(
                         func=ast.Name(id="getattr", ctx=ast.Load()),
                         args=[module, ast.Constant(value=name.name)],
@@ -106,9 +107,10 @@ class StatementMapper(ast.NodeTransformer):
         # Replace imports with __import__ calls
         imps = []
         for name in node.names:
+            as_name = name.asname if name.asname else name.name
             imps.append(
                 ast.NamedExpr(
-                    target=ast.Name(id=name.name, ctx=ast.Store()),
+                    target=ast.Name(id=as_name, ctx=ast.Store()),
                     value=ast.Call(
                         func=ast.Name(id="__import__", ctx=ast.Load()),
                         args=[ast.Constant(value=name.name)],
@@ -233,7 +235,7 @@ class StatementMapper(ast.NodeTransformer):
         statements = [self.map_stmt(i) for i in body]
 
         # If there's nothing in the body, return None.
-        if not statements:
+        if not statements or statements[0] is None:
             return ast.Constant(value=None)
 
         # If there's only one expression in the body, just return that. Otherwise, return a tuple
