@@ -147,3 +147,4 @@ In cases where there is not enough room in a section to accommodate the next tok
 
 - Does not support error handling
 - Does not support `async`
+- Does not support statements like `yield`, `break`, `del`, `continue`
