@@ -19,9 +19,20 @@ def partition_token(tok, space):
     splpt = ts.find(".") if tok.type == NAME else space
     # Checks to make sure we aren't in the middle of an f-string
     if "f'" in ts:
-        for i in range(space - TOLERANCE, space + TOLERANCE + 1):
-            if ts[:i].count("{") == ts[:i].count("}"):
-                splpt = i
+        ts = ts.replace("f'", "", 1)
+        poss_splits = [
+            i
+            for i in range(space - TOLERANCE, space + TOLERANCE + 1)
+            if ts[:i].count("{") == ts[:i].count("}")
+        ]
+        if poss_splits:
+            splpt = max(poss_splits)
+            return Token(string="f'" + ts[:splpt] + "'", type=tok.type), Token(
+                string="f'" + ts[splpt:], type=tok.type
+            )
+        else:
+            return Token(string="''", type=tok.type), Token(string=ts, type=tok.type)
+
     septok = "" if tok.type == NAME else "'"
     return Token(string=ts[:splpt] + septok, type=tok.type), Token(
         string=septok + ts[splpt:], type=tok.type
@@ -78,13 +89,6 @@ def reflow(script, outline):
                             left, right = partition_token(token_list.pop(0), space)
                             token_list.insert(0, right)
                             cur_token = left
-                        elif (
-                            old.type == STRING
-                            or token_list[0].type == STRING
-                            and space > 0
-                        ):
-                            # If the previous token was a string, we can just append "" to the end of it, which will be ignored
-                            cur_token = Token(string="", type=STRING)
                         else:
                             # We can't resize, so continue to the next group :(
                             break
