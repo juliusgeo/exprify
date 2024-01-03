@@ -2,6 +2,7 @@ import pytest
 import os
 
 from exprify import transpiled_script
+from .utils import exec_with_output
 
 SCRIPTS_PATH = "test_scripts"
 
@@ -15,4 +16,6 @@ SCRIPTS_PATH = "test_scripts"
     ],
 )
 def test_transform_scripts(filename):
-    print(transpiled_script(filename))
+    assert exec_with_output(open(filename).read()) == exec_with_output(
+        transpiled_script(filename)
+    )

@@ -26,7 +26,7 @@ def partition_token(tok, space):
             if ts[:i].count("{") == ts[:i].count("}")
         ]
         if poss_splits:
-            splpt = max(poss_splits)
+            splpt = min(poss_splits)
             return Token(string="f'" + ts[:splpt] + "'", type=tok.type), Token(
                 string="f'" + ts[splpt:], type=tok.type
             )
@@ -46,18 +46,16 @@ def generate_whitespace_groups(line):
     ]
 
 
-def reflow(script, outline):
+def reflow(script, outline, tolerance=TOLERANCE):
     # Minify script and then transpile it
-    with open(script, "r") as f:
-        script = f.read()
-        script = python_minifier.minify(
-            script,
-            rename_locals=True,
-            rename_globals=True,
-            hoist_literals=True,
-            remove_annotations=True,
-        )
-        script = transpile_script_source(script)
+    script = python_minifier.minify(
+        script,
+        rename_locals=True,
+        rename_globals=True,
+        hoist_literals=True,
+        remove_annotations=True,
+    )
+    script = transpile_script_source(script)
 
     old, *token_list = [
         Token(tok.string.strip(), tok.type)
@@ -65,17 +63,18 @@ def reflow(script, outline):
     ]
     new_lines = "(\n);"
 
-    for line in open(outline).readlines():
+    for line in outline.splitlines():
         line = line.rstrip()
         cur_line = ""
         carry_over = 0
         for is_whitespace, num_chars in generate_whitespace_groups(line):
             if is_whitespace:
                 cur_line += " " * (num_chars + carry_over)
-            else:
+            elif token_list:
                 space = num_chars
                 while space > 0:
                     if not token_list:
+                        cur_line += "#" * space
                         break
                     if len(token_list[0].string.strip()) > space + TOLERANCE:
                         if token_list[0].type in (STRING, NAME):
@@ -115,8 +114,10 @@ def reflow(script, outline):
                     space -= len(tok_str)
                     cur_line += tok_str
                 carry_over = space
-        if len(token_list) > 0:
+        if len(token_list) > 1:
             cur_line = cur_line + "\\\n"
         if cur_line:
             new_lines += cur_line
+        if not token_list:
+            break
     return "".join(new_lines)

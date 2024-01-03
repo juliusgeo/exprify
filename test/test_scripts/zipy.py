@@ -240,7 +240,11 @@ def string_to_zip(filename: str, strk: str) -> None:
         f.write(zip_content)
 
 
-uncompressed_string = "deflate late"
+uncompressed_string = """"Did you win your sword fight?"
+            "Of course I won the fucking sword fight," Hiro says. "I'm the greatest sword fighter in the world."
+            "And you wrote the software."
+            "Yeah. That, too," Hiro says.",
+        """
 
 
 string_to_zip(

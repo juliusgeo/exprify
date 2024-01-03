@@ -1,5 +1,6 @@
 import pytest
-import os
+from .utils import exec_with_output
+
 
 from exprify import reflow
 
@@ -8,15 +9,41 @@ SCRIPTS_PATH = "test_scripts"
 
 
 @pytest.mark.parametrize(
-    ("outline"),
+    ("script", "outline"),
     [
-        os.path.join(OUTLINES_PATH, i)
-        for i in os.listdir(OUTLINES_PATH)
-        if i.endswith(".txt")
+        ("test_scripts/zipy.py", "reflow_outlines/outline1.txt"),
+        ("test_scripts/rijndael.py", "reflow_outlines/outline2.txt"),
     ],
 )
-def test_reflow(outline):
-    reflowed_script = reflow("test_scripts/zipy.py", outline)
+def test_reflow_script(script, outline):
+    outline = open(outline).read()
+    script = open(script).read()
+    reflowed_script = reflow(script, outline)
     print(reflowed_script)
-    namespace = {}
-    exec(reflowed_script, namespace)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)
+
+
+def test_reflow_snippet():
+    script = """
+def pow(a, ex):
+    ret = a
+    while ex > 1:
+        ret *= a
+        ex -= 1
+    return ret
+    """
+    outline = """
+    8888888888888
+    8888888888888
+    8888
+    8888
+    888888888888
+    888888888888
+    8888
+    8888
+    8888888888888
+    8888888888888
+    """
+    reflowed_script = reflow(script, outline, tolerance=1)
+    print(reflowed_script)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)

@@ -1,6 +1,7 @@
 # Exprify
 
-Remove the need for whitespace in Python code by converting it to expression-only syntax.
+Convert arbitrary Python code to expression-only syntax while preserving semantics.
+Additionally includes functions for reflowing the expression-only code into arbitrary shapes (useful for creating ASCII art of your code).
 
 ### Installation
 Currently not on PyPi, so you'll need to install from source:
@@ -11,6 +12,7 @@ pip install .
 ```
 
 ### Usage
+
 ```python
 from exprify import transpiled_function_ast
 def readme_example_func():
@@ -26,7 +28,45 @@ print(transpiled_function_ast(readme_example_func))
 # Output:
 >>> readme_example_func = lambda: [(A := type('A', (), {'__init__': lambda self, a: setattr(self, 'a', a), '__add__': lambda self, other: self.a + other.a})), (a := A(1)), (b := A(2)), a + b][-1]
 ```
+If you want to turn a snippet into ASCII art, it will probably require some fine-tuning of the parameters to get an aesthetically pleasing result:
 
+```python
+from exprify import reflow
+script = """
+def pow(a, ex):
+    ret = a
+    while ex > 1:
+        ret *= a
+        ex -= 1
+    return ret
+    """
+outline = """
+8888888888888
+8888888888888
+8888
+8888
+888888888888
+888888888888
+8888
+8888
+8888888888888
+8888888888888
+"""
+reflowed_script=reflow(script,outline, tolerance=1)
+print(reflowed_script)
+# Output:
+);\
+    pow=lambda a,\
+    ex:[(A:=a),[[\
+    (A:=\
+    (A*a\
+    )),(ex:=(ex-\
+    1))][-1]for _\
+    in iter\
+    (lambda\
+    :ex>1,False)]\
+    ,A][-1];#####
+```
 ### Background
 
 Because whitespace in Python has syntactic meaning, it is relatively difficult to obfuscate/minify Python code.
@@ -34,11 +74,14 @@ However, Python *expressions* don't have this same limitation. Unfortunately, wr
 is difficult (but not impossible), and results in code that is very difficult to refactor.
 For example, compare the two following equivalent functions:
 ```python
-def sum(a, b):
-    f = a+b
-    return f
+def pow(a, b):
+    ret = a
+    while b > 1:
+        ret *= a
+        b -= 1
+    return ret
 
-sum = lambda a, b: a+b
+pow = lambda a, b: [(ret := a), [[(ret := (ret * a)), (b := (b - 1))][-1] for _ in iter(lambda: b > 1, False)], ret][-1]
 ```
 The first necessarily requires whitespace--you will get a syntax error if the indentation is omitted. The second is a single line,
 but can be difficult to read for complex examples. Let's look at one of those complex examples:
@@ -63,8 +106,12 @@ You can see now why it might be preferable to write in the first form, rather th
 
 For my [previous obfuscated projects](https://gist.github.com/juliusgeo/0eb005a67f4b772b2b2b8ef54e00b509), I would do this conversion by hand, and then
 use my [other project](https://github.com/juliusgeo/pyflate) which re-flows code written in the expression syntax into ASCII art to produce the final result.
-This project is the missing link in the middle, hopefully allowing for a pipeline that transforms Python code from normal syntax -> expression only syntax -> minified or obfuscated result.
+This project automates the first step, and improves the ASCII art reflowing.
+
+
 ### How it works
+
+#### Transpilation
 
 Most of the tricks used here are described in a [wonderful article](https://qiita.com/KTakahiro1729/items/c9cb757473de50652374) by KTakahiro1729 (in Japanese).
 This package automates the process of conversion, and introduces a few new tricks for other language constructs.
@@ -82,6 +129,18 @@ Is converted to:
 The lambda function calculates the condition, and the iter continues to produce True until the sentinel value (2nd argument) is encountered.
 
 `with` statements are converted very similarly to any other block of statements, but calls to `__enter__` and `__exit__` are added before and after the body, with additional NamedExpressions if the context managers are bound to variables.
+
+##### Creating ASCII art
+
+The `reflow` function takes a path to a script, and a path to a template file.
+The script is first minified using [python-minifier](https://github.com/dflook/python-minifier). `python-minifier` renames
+variables, and removes unneeded elements from the script, but does not change the structure of the code.
+The minified code will still be reliant on whitespace, so it has to be transpiled before being reflowed.
+The template file can be any kind of ASCII art, but must contain enough non-whitespace chars
+to accommodate all the characters in the script after minification+transpilation.
+The reflowing algorithm is a simple greedy algorithm that tries to fit as many tokens as possible within each section of the ascii art.
+Each line of the template is separated into whitespace and non-whitespace sections, and the non-whitespace sections are filled with tokens from the script.
+In cases where there is not enough room in a section to accommodate the next token, the token is either moved to the next section, or, if it is a name or a string, will be split into multiple tokens if possible.
 
 
 ### Limitations

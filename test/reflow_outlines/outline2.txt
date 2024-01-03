@@ -1,0 +1,18 @@
+
+
+               AAA               EEEEEEEEEEEEEEEE   SSSSSSSSSSSSSSS
+              A:::A              E::::::::::::::E SS:::::::::::::::S
+             A:::::A             E::::::::::::::ES:::::SSSSSS::::::S
+            A:::::::A            EE:::EEEEEE::::ES:::::S     SSSSSSS
+           A:::::::::A             E::E    EEEEEES:::::S
+          A:::::A:::::A            E::E          S:::::S
+         A:::::A A:::::A           E:::EEEEEEE    S::::SSSS
+        A:::::A   A:::::A          E:::::::::E     SS::::::SSSSS
+       A:::::A     A:::::A         E:::::::::E       SSS::::::::SS
+      A:::::AAAAAAAAA:::::A        E:::EEEEEEE          SSSSSS::::S
+     A:::::::::::::::::::::A       E::E                      S:::::S
+    A:::::AAAAAAAAAAAAA:::::A      E::E    EEEEEE            S:::::S
+   A:::::A             A:::::A   EE:::EEEEE:::::ESSSSSSS     S:::::S
+  A:::::A               A:::::A  E::::::::::::::ES::::::SSSSSS:::::S
+ A:::::A                 A:::::A E::::::::::::::ES:::::::::::::::SS
+AAAAAAA                   AAAAAAAEEEEEEEEEEEEEEEE SSSSSSSSSSSSSSS

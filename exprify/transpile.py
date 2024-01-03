@@ -16,14 +16,14 @@ def transpiled_function_ast(func, debug=False):
     mapper = StatementMapper()
     a = mapper.generic_visit(ast.parse(inspect.getsource(func)))
     a = ast.fix_missing_locations(a)
-    src = ""
+    src = ast.unparse(a)
     if debug:
         ref = ast.dump(ast.parse(inspect.getsource(func)), indent=1)
         gen = ast.dump(a, indent=1)
         print("Reference:\n", ref)
         print("Generated:\n", gen)
         print(src)
-    return ast.unparse(a)
+    return src
 
 
 def transpiled_script(filename):
