@@ -25,24 +25,25 @@ TOLERANCE = 4
 def partition_token(tok, space, tolerance):
     ts = tok.string
     splpt = ts.find(".") if tok.type == NAME else space
-    # Checks to make sure we aren't in the middle of an f-string
     septok = "" if tok.type == NAME else "'"
     left, right = ts[:splpt] + septok, septok + ts[splpt:]
-    if "f'" in ts:
-        ts = ts.replace("f'", "", 1)
+
+    if ts.startswith("f'"):
+        # Generate possible splits that wouldn't break the f-string (not inside of an embedded expression).
+        # The range start is clamped so it is at minimum 2 to prevent splitting before the f-string identifier
         poss_splits = [
-            i
-            for i in range(space - tolerance, space + tolerance + 1)
+            (i, abs(space - i))
+            for i in range(max(space - tolerance, 2), space + tolerance + 1)
             if ts[:i].count("{") == ts[:i].count("}")
         ]
         if poss_splits:
-            splpt = min(poss_splits)
-            left, right = ("f'" + ts[:splpt] + "'", "f'" + ts[splpt:])
-
+            splpt, _ = min(poss_splits, key=lambda x: x[1])
+            left, right = (ts[:splpt] + "'", "f'" + ts[splpt:])
         else:
             left, right = "''", ts
-    if "b'" in ts:
+    if ts.startswith("b'"):
         left, right = (ts[:splpt] + "'", "b'" + ts[splpt:])
+
     return TokenInfo(**tok._asdict() | dict(string=left)), TokenInfo(
         **tok._asdict() | dict(string=right)
     )
