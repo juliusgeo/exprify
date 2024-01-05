@@ -1,23 +1,33 @@
-from collections import namedtuple
-
 from exprify import transpile_script_source
 from itertools import groupby
 from keyword import iskeyword
-from tokenize import NAME, STRING, tokenize
+from tokenize import (
+    NAME,
+    STRING,
+    NUMBER,
+    LPAR,
+    RPAR,
+    LBRACE,
+    RBRACE,
+    LSQB,
+    RSQB,
+    tokenize,
+    TokenInfo,
+)
 import tokenize as tk
 import io
 import python_minifier
 
 
 TOLERANCE = 4
-# We only need these attributes from the Token namedtuples defined in the tokenize module
-Token = namedtuple("Token", ["string", "type"])
 
 
 def partition_token(tok, space, tolerance):
     ts = tok.string
     splpt = ts.find(".") if tok.type == NAME else space
     # Checks to make sure we aren't in the middle of an f-string
+    septok = "" if tok.type == NAME else "'"
+    left, right = ts[:splpt] + septok, septok + ts[splpt:]
     if "f'" in ts:
         ts = ts.replace("f'", "", 1)
         poss_splits = [
@@ -27,15 +37,14 @@ def partition_token(tok, space, tolerance):
         ]
         if poss_splits:
             splpt = min(poss_splits)
-            return Token(string="f'" + ts[:splpt] + "'", type=tok.type), Token(
-                string="f'" + ts[splpt:], type=tok.type
-            )
-        else:
-            return Token(string="''", type=tok.type), Token(string=ts, type=tok.type)
+            left, right = ("f'" + ts[:splpt] + "'", "f'" + ts[splpt:])
 
-    septok = "" if tok.type == NAME else "'"
-    return Token(string=ts[:splpt] + septok, type=tok.type), Token(
-        string=septok + ts[splpt:], type=tok.type
+        else:
+            left, right = "''", ts
+    if "b'" in ts:
+        left, right = (ts[:splpt] + "'", "b'" + ts[splpt:])
+    return TokenInfo(**tok._asdict() | dict(string=left)), TokenInfo(
+        **tok._asdict() | dict(string=right)
     )
 
 
@@ -57,24 +66,26 @@ def reflow(script, outline, tolerance=TOLERANCE):
     )
     script = transpile_script_source(script)
 
-    old, *token_list = [
-        Token(tok.string.strip(), tok.type)
-        for tok in tokenize(io.BytesIO(bytes(script, "utf-8")).readline)
-    ]
-    new_lines = "(\n);"
+    old, *token_list = list(tokenize(io.BytesIO(bytes(script, "utf-8")).readline))
+    new_lines = "\n'';\\\n"
+    implicit_line_stack = []
+    implicit_line_matches = {RPAR: LPAR, RBRACE: LBRACE, RSQB: LSQB}
 
     for line in outline.splitlines():
         line = line.rstrip()
         cur_line = ""
         carry_over = 0
-        for is_whitespace, num_chars in generate_whitespace_groups(line):
+        for is_whitespace, space in generate_whitespace_groups(line):
             if is_whitespace:
-                cur_line += " " * (num_chars + carry_over)
-            elif token_list:
-                space = num_chars
+                cur_line += " " * (space + carry_over)
+            elif not token_list:
+                cur_line += "#" * space
+                carry_over = 0
+            else:
                 while space > 0:
                     if not token_list:
                         cur_line += "#" * space
+                        space = 0
                         break
                     if len(token_list[0].string.strip()) > space + tolerance:
                         if token_list[0].type in (STRING, NAME):
@@ -95,31 +106,37 @@ def reflow(script, outline, tolerance=TOLERANCE):
                             break
                     else:
                         cur_token = token_list.pop(0)
+                    exact_type = cur_token.exact_type
                     tok_str = cur_token.string.strip()
+
+                    # Stack logic to keep track of delimiters like parens
+                    if exact_type in implicit_line_matches:
+                        if implicit_line_matches[exact_type] == implicit_line_stack[-1]:
+                            implicit_line_stack.pop(-1)
+                    if exact_type in implicit_line_matches.values():
+                        implicit_line_stack.append(exact_type)
+
                     match cur_token.type:
                         case tk.NEWLINE:
                             tok_str = tok_str + ";"
                         case tk.NL:
                             tok_str = ""
                         case _:
-                            # Need to add a space between NAMES and (keywords or NAMES)
+                            # Need to add a space between (NAMES, NUMBERS) and (keywords or NAMES)
                             if (
                                 iskeyword(tok_str) or cur_token.type == NAME
-                            ) and old.type == NAME:
+                            ) and old.type in (NAME, NUMBER):
                                 if cur_line and cur_line[-1] != " ":
                                     tok_str = " " + tok_str
-                                elif (
-                                    not cur_line and new_lines and new_lines[-1] != " "
-                                ):
-                                    tok_str = " " + tok_str
+
                     old = cur_token
                     space -= len(tok_str)
                     cur_line += tok_str
                 carry_over = space
-        if len(token_list) > 1:
-            cur_line = cur_line + "\\\n"
+        # We only need to add a line continuation character when we are not inside brackets, parens, etc,
+        # so check to make sure the implicit line stack is empty
+        if not implicit_line_stack and token_list:
+            cur_line = cur_line + "\\"
         if cur_line:
-            new_lines += cur_line
-        if not token_list:
-            break
+            new_lines += cur_line + "\n"
     return "".join(new_lines)
