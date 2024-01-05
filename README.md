@@ -1,7 +1,7 @@
 # Exprify
 
 Convert a subset of Python to expression-only syntax while preserving semantics.
-Additionally includes functionality for reflowing the expression-only code into arbitrary shapes (useful for creating ASCII art of your code).
+Additionally includes functionality for reflowing the expression-only code into executable ASCII art.
 
 ![](https://github.com/juliusgeo/exprify/blob/master/demo.gif)
 
@@ -17,60 +17,24 @@ pip install -r requirements.txt
 
 ### Usage
 
-```python
-from exprify import transpiled_function_ast
-def readme_example_func():
-    class A:
-        def __init__(self, a):
-            self.a = a
-        def __add__(self, other):
-            return self.a + other.a
-    a = A(1)
-    b = A(2)
-    return a+b
-print(transpiled_function_ast(readme_example_func))
-# Output:
->>> readme_example_func = lambda: [(A := type('A', (), {'__init__': lambda self, a: setattr(self, 'a', a), '__add__': lambda self, other: self.a + other.a})), (a := A(1)), (b := A(2)), a + b][-1]
-```
-If you want to turn a snippet into ASCII art, it will probably require some fine-tuning of the parameters to get an aesthetically pleasing result:
+This package provides a command-line utility for ease of use.
 
-```python
-from exprify import reflow
-script = """
-def pow(a, ex):
-    ret = a
-    while ex > 1:
-        ret *= a
-        ex -= 1
-    return ret
-    """
-outline = """
-    8888888888888
-    8888888888888
-    8888
-    8888
-    888888888888
-    888888888888
-    8888
-    8888
-    8888888888888
-    8888888888888
-"""
-reflowed_script=reflow(script,outline, tolerance=1)
-print(reflowed_script)
-# Output:
-);\
-    pow=lambda a,\
-    ex:[(A:=a),[[\
-    (A:=\
-    (A*a\
-    )),(ex:=(ex-\
-    1))][-1]for _\
-    in iter\
-    (lambda\
-    :ex>1,False)]\
-    ,A][-1];#####
+Transpile to expression-only syntax
+```bash
+exprify <your script>.py
 ```
+
+Transpile, and then reflow to fit the ASCII art in `<your outline>.txt`
+```bash
+exprify <your script>.py -o <your outline>.txt
+```
+If you want to turn a snippet into ASCII art, it will probably require some fine-tuning of the parameters to get an aesthetically pleasing result.
+Currently, the only parameter exposed is `tolerance`, which determines how closely the output must match the outline:
+
+```bash
+exprify <your script>.py -o <your outline>.txt -t 3
+```
+
 ### Background
 
 Because whitespace in Python has syntactic meaning, it is relatively difficult to obfuscate/minify Python code.
