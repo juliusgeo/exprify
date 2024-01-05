@@ -23,3 +23,6 @@ classifiers = [
 
 [tool.ruff]
 exclude = ["exprify/__init__.py"]
+
+[project.scripts]
+exprify = "exprify.__main__:main"

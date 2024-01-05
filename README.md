@@ -3,6 +3,8 @@
 Convert a subset of Python to expression-only syntax while preserving semantics.
 Additionally includes functionality for reflowing the expression-only code into arbitrary shapes (useful for creating ASCII art of your code).
 
+![](https://github.com/juliusgeo/exprify/demo.gif)
+
 ### Installation
 Currently not on PyPi, so you'll need to install from source:
 ```bash

@@ -37,7 +37,5 @@ def transpile_script_source(src):
     a = mapper.generic_visit(ast.parse(src))
     a.body = [ast.Expr(value=node) for node in a.body]
     a = ast.fix_missing_locations(a)
-    compiled_ast = compile(ast.unparse(a), filename="", mode="exec")
-    namespace = {}
-    exec(compiled_ast, namespace)
-    return ast.unparse(a)
+    unparsed = ast.unparse(a)
+    return unparsed

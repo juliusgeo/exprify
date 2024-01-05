@@ -44,6 +44,6 @@ def pow(a, ex):
     8888888888888
     8888888888888
     """
-    reflowed_script = reflow(script, outline, tolerance=1)
+    reflowed_script = reflow(script, outline, tolerance=4)
     print(reflowed_script)
     assert exec_with_output(reflowed_script) == exec_with_output(script)

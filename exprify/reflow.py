@@ -14,7 +14,7 @@ TOLERANCE = 4
 Token = namedtuple("Token", ["string", "type"])
 
 
-def partition_token(tok, space):
+def partition_token(tok, space, tolerance):
     ts = tok.string
     splpt = ts.find(".") if tok.type == NAME else space
     # Checks to make sure we aren't in the middle of an f-string
@@ -22,7 +22,7 @@ def partition_token(tok, space):
         ts = ts.replace("f'", "", 1)
         poss_splits = [
             i
-            for i in range(space - TOLERANCE, space + TOLERANCE + 1)
+            for i in range(space - tolerance, space + tolerance + 1)
             if ts[:i].count("{") == ts[:i].count("}")
         ]
         if poss_splits:
@@ -76,7 +76,7 @@ def reflow(script, outline, tolerance=TOLERANCE):
                     if not token_list:
                         cur_line += "#" * space
                         break
-                    if len(token_list[0].string.strip()) > space + TOLERANCE:
+                    if len(token_list[0].string.strip()) > space + tolerance:
                         if token_list[0].type in (STRING, NAME):
                             # We can't split NAMEs if they don't have a dot in them
                             if (
@@ -85,7 +85,9 @@ def reflow(script, outline, tolerance=TOLERANCE):
                             ):
                                 break
                             # If the string is too long, split it up
-                            left, right = partition_token(token_list.pop(0), space)
+                            left, right = partition_token(
+                                token_list.pop(0), space, tolerance
+                            )
                             token_list.insert(0, right)
                             cur_token = left
                         else:
