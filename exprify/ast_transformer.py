@@ -323,6 +323,9 @@ class StatementMapper(ast.NodeTransformer):
     def visit_TryStar(self, node):
         raise ExprifyException("Exprify does not support 'try'")
 
+    def visit_Raise(self, node):
+        raise ExprifyException("Exprify does not support 'raise")
+
     def visit_AsyncFunctionDef(self, node):
         raise ExprifyException("Exprify does not support async")
 
@@ -331,3 +334,9 @@ class StatementMapper(ast.NodeTransformer):
 
     def visit_AsyncFor(self, node):
         raise ExprifyException("Exprify does not support async")
+
+    def visit_Nonlocal(self, node):
+        raise ExprifyException("Exprify does not support nonlocal")
+
+    def visit_Global(self, node):
+        raise ExprifyException("Exprify does not support global")

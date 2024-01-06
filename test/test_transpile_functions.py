@@ -192,6 +192,10 @@ def try_star_func():
         None
 
 
+def raise_func():
+    raise Exception()
+
+
 def async_func():
     async def a():
         return 1
@@ -209,6 +213,20 @@ def async_with_func():
             return
 
 
+def nonlocal_func():
+    a = 0
+
+    def inner():
+        nonlocal a
+        a += 1
+
+
+def global_func():
+    def inner():
+        global a
+        a += 1
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -220,9 +238,12 @@ def async_with_func():
         pass_func,
         try_func,
         try_star_func,
+        raise_func,
         async_func,
         async_for_func,
         async_with_func,
+        nonlocal_func,
+        global_func,
     ],
 )
 def test_failure_funcs(func):
