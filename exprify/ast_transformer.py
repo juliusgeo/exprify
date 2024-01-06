@@ -4,6 +4,10 @@ import itertools
 intermediate_gen = itertools.count(1)
 
 
+class ExprifyException(Exception):
+    pass
+
+
 class StatementMapper(ast.NodeTransformer):
     top_level = True
 
@@ -78,51 +82,47 @@ class StatementMapper(ast.NodeTransformer):
             value=ast.BinOp(left=target_load, op=node.op, right=node.value),
         )
 
-    def visit_ImportFrom(self, node):
-        # Replace from library import function with getattr(__import__(library), function) calls
-        imps = []
-        module = ast.Call(
-            func=ast.Name(id="__import__", ctx=ast.Load()),
-            args=[ast.Constant(value=node.module)],
-            keywords=[],
-        )
-        for name in node.names:
-            as_name = name.asname if name.asname else name.name
-            imps.append(
-                ast.NamedExpr(
-                    target=ast.Name(id=as_name, ctx=ast.Store()),
-                    value=ast.Call(
-                        func=ast.Name(id="getattr", ctx=ast.Load()),
-                        args=[module, ast.Constant(value=name.name)],
-                        keywords=[],
-                    ),
-                )
-            )
+    def import_Helper(self, node, imp_gen):
+        imps = [imp_gen(name) for name in node.names]
         if len(imps) > 1:
             return ast.Tuple(elts=imps, ctx=ast.Load())
         else:
             return ast.Expr(value=imps[0])
+
+    def visit_ImportFrom(self, node):
+        # Replace from library import function with getattr(__import__(library), function) calls
+        def imp_gen(name):
+            module = ast.Call(
+                func=ast.Name(id="__import__", ctx=ast.Load()),
+                args=[ast.Constant(value=node.module)],
+                keywords=[],
+            )
+            as_name = name.asname if name.asname else name.name
+            return ast.NamedExpr(
+                target=ast.Name(id=as_name, ctx=ast.Store()),
+                value=ast.Call(
+                    func=ast.Name(id="getattr", ctx=ast.Load()),
+                    args=[module, ast.Constant(value=name.name)],
+                    keywords=[],
+                ),
+            )
+
+        return self.import_Helper(node, imp_gen)
 
     def visit_Import(self, node):
         # Replace imports with __import__ calls
-        imps = []
-        for name in node.names:
+        def imp_gen(name):
             as_name = name.asname if name.asname else name.name
-            imps.append(
-                ast.NamedExpr(
-                    target=ast.Name(id=as_name, ctx=ast.Store()),
-                    value=ast.Call(
-                        func=ast.Name(id="__import__", ctx=ast.Load()),
-                        args=[ast.Constant(value=name.name)],
-                        keywords=[],
-                    ),
-                )
+            return ast.NamedExpr(
+                target=ast.Name(id=as_name, ctx=ast.Store()),
+                value=ast.Call(
+                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    args=[ast.Constant(value=name.name)],
+                    keywords=[],
+                ),
             )
 
-        if len(imps) > 1:
-            return ast.Tuple(elts=imps, ctx=ast.Load())
-        else:
-            return ast.Expr(value=imps[0])
+        return self.import_Helper(node, imp_gen)
 
     def visit_Assign(self, node):
         if self.top_level:
@@ -134,18 +134,17 @@ class StatementMapper(ast.NodeTransformer):
                     target=ast.Name(id=intermediate_name, ctx=ast.Store()),
                     value=node.value,
                 )
-                targets = [intermediate]
-                for index, target in enumerate(node.targets[0].elts):
-                    targets.append(
-                        ast.NamedExpr(
-                            target=target,
-                            value=ast.Subscript(
-                                ast.Name(id=intermediate_name, ctx=ast.Load()),
-                                slice=ast.Constant(value=index),
-                                ctx=ast.Load(),
-                            ),
-                        )
+                targets = [intermediate] + [
+                    ast.NamedExpr(
+                        target=target,
+                        value=ast.Subscript(
+                            ast.Name(id=intermediate_name, ctx=ast.Load()),
+                            slice=ast.Constant(value=index),
+                            ctx=ast.Load(),
+                        ),
                     )
+                    for index, target in enumerate(node.targets[0].elts)
+                ]
             else:
                 if isinstance(node.targets[0], ast.Name):
                     return ast.NamedExpr(target=node.targets[0], value=node.value)
@@ -160,9 +159,10 @@ class StatementMapper(ast.NodeTransformer):
                         keywords=[],
                     )
         else:
-            targets = []
-            for target in node.targets:
-                targets.append(ast.NamedExpr(target=target, value=node.value))
+            targets = [
+                ast.NamedExpr(target=target, value=node.value)
+                for target in node.targets
+            ]
         return ast.List(elts=targets, ctx=ast.Load())
 
     def visit_For(self, node):
@@ -217,7 +217,7 @@ class StatementMapper(ast.NodeTransformer):
         return node.value
 
     def visit_Expr(self, node):
-        return node.value
+        return self.visit(node.value)
 
     def map_stmt(self, node):
         if isinstance(node, list):
@@ -299,6 +299,35 @@ class StatementMapper(ast.NodeTransformer):
                 value=lambda_func,
             )
 
-    def generic_visit(self, node):
-        if node:
-            return super().generic_visit(node)
+    def visit_Continue(self, node):
+        raise ExprifyException("Exprify does not support 'continue'")
+
+    def visit_Break(self, node):
+        raise ExprifyException("Exprify does not support 'break'")
+
+    def visit_Yield(self, node):
+        raise ExprifyException("Exprify does not support 'yield'")
+
+    def visit_YieldFrom(self, node):
+        raise ExprifyException("Exprify does not support 'yield'")
+
+    def visit_Delete(self, node):
+        raise ExprifyException("Exprify does not support 'del'")
+
+    def visit_Pass(self, node):
+        raise ExprifyException("Exprify does not support 'pass'")
+
+    def visit_Try(self, node):
+        raise ExprifyException("Exprify does not support 'try'")
+
+    def visit_TryStar(self, node):
+        raise ExprifyException("Exprify does not support 'try'")
+
+    def visit_AsyncFunctionDef(self, node):
+        raise ExprifyException("Exprify does not support async")
+
+    def visit_AsyncWith(self, node):
+        raise ExprifyException("Exprify does not support async")
+
+    def visit_AsyncFor(self, node):
+        raise ExprifyException("Exprify does not support async")

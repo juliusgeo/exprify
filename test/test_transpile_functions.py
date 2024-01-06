@@ -1,6 +1,7 @@
 import pytest
 
 from exprify import transpiled_function_object
+from exprify.ast_transformer import ExprifyException
 
 
 def basic_func():
@@ -146,3 +147,84 @@ def test_func_args(func, args):
         a = func(arg)
         b = transpiled_function_object(func, debug=True)(arg)
         assert a == b, f"{a} != {b}"
+
+
+def continue_func():
+    for _ in range(2):
+        continue
+
+
+def break_func():
+    for _ in range(2):
+        break
+
+
+def yield_func():
+    for _ in range(2):
+        yield 1
+
+
+def yield_from_func():
+    for _ in range(2):
+        yield from [1, 2]
+
+
+def del_func():
+    a = 1
+    del a
+
+
+def pass_func():
+    pass
+
+
+def try_func():
+    try:
+        raise Exception()
+    except Exception:
+        return None
+
+
+def try_star_func():
+    try:
+        raise Exception()
+    except* Exception:
+        None
+
+
+def async_func():
+    async def a():
+        return 1
+
+
+def async_for_func():
+    async def a():
+        async for _ in range(2):
+            return
+
+
+def async_with_func():
+    async def a():
+        async with True:
+            return
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        continue_func,
+        break_func,
+        yield_func,
+        yield_from_func,
+        del_func,
+        pass_func,
+        try_func,
+        try_star_func,
+        async_func,
+        async_for_func,
+        async_with_func,
+    ],
+)
+def test_failure_funcs(func):
+    with pytest.raises(ExprifyException):
+        transpiled_function_object(func, debug=True)
