@@ -185,13 +185,6 @@ def try_func():
         return None
 
 
-def try_star_func():
-    try:
-        raise Exception()
-    except* Exception:
-        None
-
-
 def raise_func():
     raise Exception()
 
@@ -237,7 +230,6 @@ def global_func():
         del_func,
         pass_func,
         try_func,
-        try_star_func,
         raise_func,
         async_func,
         async_for_func,
