@@ -83,9 +83,11 @@ def reflow(script, outline, tolerance=TOLERANCE):
                 cur_line += "#" * space
                 carry_over = 0
             else:
+                new_tokens = []
                 while space > 0:
                     if not token_list:
-                        cur_line += "#" * space
+                        cur_line += "".join(new_tokens) + "#" * space
+                        new_tokens = []
                         space = 0
                         break
                     if len(token_list[0].string.strip()) > space + tolerance:
@@ -127,12 +129,24 @@ def reflow(script, outline, tolerance=TOLERANCE):
                             if (
                                 iskeyword(tok_str) or cur_token.type == NAME
                             ) and old.type in (NAME, NUMBER):
-                                if cur_line and cur_line[-1] != " ":
+                                if new_tokens and (new_tokens[-1][-1] != " "):
+                                    tok_str = " " + tok_str
+                                if (
+                                    cur_line
+                                    and not new_tokens
+                                    and (cur_line[-1] != " ")
+                                ):
                                     tok_str = " " + tok_str
 
                     old = cur_token
                     space -= len(tok_str)
-                    cur_line += tok_str
+                    new_tokens.append(tok_str)
+                pos = 1
+                while space > 0:
+                    new_tokens.insert(pos, " ")
+                    space -= 1
+                    pos += 1
+                cur_line += "".join(new_tokens)
                 carry_over = space
         # We only need to add a line continuation character when we are not inside brackets, parens, etc,
         # so check to make sure the implicit line stack is empty
