@@ -1,3 +1,6 @@
+from sys import version_info
+
+
 from exprify import transpile_script_source
 from itertools import groupby
 from keyword import iskeyword
@@ -5,12 +8,6 @@ from tokenize import (
     NAME,
     STRING,
     NUMBER,
-    LPAR,
-    RPAR,
-    LBRACE,
-    RBRACE,
-    LSQB,
-    RSQB,
     tokenize,
     TokenInfo,
 )
@@ -19,7 +16,13 @@ import io
 import python_minifier
 
 
+NON_SPLITTABLE = []
+if version_info >= (3, 12, 0):
+    from token import FSTRING_MIDDLE
+
+    NON_SPLITTABLE = [FSTRING_MIDDLE]
 TOLERANCE = 4
+INVALID_SPLIT_CHARS = {"\\": 1, "\\x": 2, "\\u": 4, "\\U": 8}
 
 
 def partition_token(tok, space, tolerance):
@@ -40,9 +43,16 @@ def partition_token(tok, space, tolerance):
             splpt, _ = min(poss_splits, key=lambda x: x[1])
             left, right = (ts[:splpt] + "'", "f'" + ts[splpt:])
         else:
-            left, right = "''", ts
+            left, right = ts, ""
     if ts.startswith("b'"):
-        left, right = (ts[:splpt] + "'", "b'" + ts[splpt:])
+        # if we have an escaped char as the last one, we want to go past it
+        for ch, window in INVALID_SPLIT_CHARS.items():
+            if ch in ts[splpt - window - 1 :]:
+                splpt += window
+        if splpt >= len(ts):
+            left, right = ts, ""
+        else:
+            left, right = (ts[:splpt] + "'", "b'" + ts[splpt:])
 
     return TokenInfo(**tok._asdict() | dict(string=left)), TokenInfo(
         **tok._asdict() | dict(string=right)
@@ -69,8 +79,6 @@ def reflow(script, outline, tolerance=TOLERANCE):
 
     old, *token_list = list(tokenize(io.BytesIO(bytes(script, "utf-8")).readline))
     new_lines = "\n'';\\\n"
-    implicit_line_stack = []
-    implicit_line_matches = {RPAR: LPAR, RBRACE: LBRACE, RSQB: LSQB}
 
     for line in outline.splitlines():
         line = line.rstrip()
@@ -109,15 +117,12 @@ def reflow(script, outline, tolerance=TOLERANCE):
                             break
                     else:
                         cur_token = token_list.pop(0)
-                    exact_type = cur_token.exact_type
+
                     tok_str = cur_token.string.strip()
 
-                    # Stack logic to keep track of delimiters like parens
-                    if exact_type in implicit_line_matches:
-                        if implicit_line_matches[exact_type] == implicit_line_stack[-1]:
-                            implicit_line_stack.pop(-1)
-                    if exact_type in implicit_line_matches.values():
-                        implicit_line_stack.append(exact_type)
+                    if cur_token.type in NON_SPLITTABLE:
+                        # if we're in the middle of an f-string, we need to make sure we get to an op before splitting
+                        tok_str += token_list.pop(0).string
 
                     match cur_token.type:
                         case tk.NEWLINE:
@@ -148,10 +153,9 @@ def reflow(script, outline, tolerance=TOLERANCE):
                     pos += 1
                 cur_line += "".join(new_tokens)
                 carry_over = space
-        # We only need to add a line continuation character when we are not inside brackets, parens, etc,
-        # so check to make sure the implicit line stack is empty
-        if not implicit_line_stack and token_list:
+        if token_list:
             cur_line = cur_line + "\\"
         if cur_line:
             new_lines += cur_line + "\n"
+
     return "".join(new_lines)

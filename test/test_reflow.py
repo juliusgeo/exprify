@@ -47,3 +47,34 @@ def pow(a, ex):
     reflowed_script = reflow(script, outline, tolerance=4)
     print(reflowed_script)
     assert exec_with_output(reflowed_script) == exec_with_output(script)
+
+
+def test_reflow_f_string():
+    script = """
+f'{10:0{10}b}'
+f'{10:0b}'
+    """
+    outline = """
+    8888888
+    88888888
+    888888888888
+    """
+    reflowed_script = reflow(script, outline, tolerance=0)
+    print(reflowed_script)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)
+
+
+def test_reflow_escape():
+    script = """
+b'\x05'
+b'\x04bb'
+    """
+    outline = """
+    88888
+    88888
+    88888
+    88888
+    """
+    reflowed_script = reflow(script, outline, tolerance=0)
+    print(reflowed_script)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)
