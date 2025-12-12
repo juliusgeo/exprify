@@ -1,8 +1,8 @@
 import pytest
 from .utils import exec_with_output
 
-
-from exprify import reflow
+from tokenize import TokenInfo, STRING
+from exprify import reflow, partition_token
 
 OUTLINES_PATH = "reflow_outlines"
 SCRIPTS_PATH = "test_scripts"
@@ -18,9 +18,9 @@ SCRIPTS_PATH = "test_scripts"
 def test_reflow_script(script, outline):
     outline = open(outline).read()
     script = open(script).read()
-    reflowed_script = reflow(script, outline)
-    print(reflowed_script)
-    assert exec_with_output(reflowed_script) == exec_with_output(script)
+    for tolerance in range(0, 10):
+        reflowed_script = reflow(script, outline, tolerance=tolerance)
+        assert exec_with_output(reflowed_script) == exec_with_output(script)
 
 
 def test_reflow_snippet():
@@ -66,8 +66,8 @@ f'{10:0b}'
 
 def test_reflow_escape():
     script = """
-b'\x05'
-b'\x04bb'
+b'\\x05'
+b'\\x04bb'
     """
     outline = """
     88888
@@ -78,3 +78,9 @@ b'\x04bb'
     reflowed_script = reflow(script, outline, tolerance=0)
     print(reflowed_script)
     assert exec_with_output(reflowed_script) == exec_with_output(script)
+
+
+def test_partition_escape():
+    token = TokenInfo(string="f'\x05\x04'", type=STRING, start=0, end=0, line=0)
+    assert partition_token(token, 3, 0)[0].string == "f'\x05'"
+    assert partition_token(token, 4, 0)[0].string == "f'\x05\x04'"

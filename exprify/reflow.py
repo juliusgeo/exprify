@@ -22,7 +22,8 @@ if version_info >= (3, 12, 0):
 
     NON_SPLITTABLE = [FSTRING_MIDDLE]
 TOLERANCE = 4
-INVALID_SPLIT_CHARS = {"\\": 1, "\\x": 2, "\\u": 4, "\\U": 8}
+# Make sure that "\\" is at the end, because it has the smallest window
+INVALID_SPLIT_CHARS = {"\\U": 8, "\\u": 4, "\\x": 2, "\\": 1}
 
 
 def partition_token(tok, space, tolerance):
@@ -30,7 +31,8 @@ def partition_token(tok, space, tolerance):
     splpt = ts.find(".") if tok.type == NAME else space
     septok = "" if tok.type == NAME else "'"
     left, right = ts[:splpt] + septok, septok + ts[splpt:]
-
+    if splpt <= 2:
+        left, right = ts, ""
     if ts.startswith("f'"):
         # Generate possible splits that wouldn't break the f-string (not inside of an embedded expression).
         # The range start is clamped so it is at minimum 2 to prevent splitting before the f-string identifier
@@ -47,13 +49,12 @@ def partition_token(tok, space, tolerance):
     if ts.startswith("b'"):
         # if we have an escaped char as the last one, we want to go past it
         for ch, window in INVALID_SPLIT_CHARS.items():
-            if ch in ts[splpt - window - 1 :]:
+            if ch in ts[splpt - window - 2 :]:
                 splpt += window
         if splpt >= len(ts):
             left, right = ts, ""
         else:
             left, right = (ts[:splpt] + "'", "b'" + ts[splpt:])
-
     return TokenInfo(**tok._asdict() | dict(string=left)), TokenInfo(
         **tok._asdict() | dict(string=right)
     )
@@ -76,7 +77,6 @@ def reflow(script, outline, tolerance=TOLERANCE):
         remove_annotations=True,
     )
     script = transpile_script_source(script)
-
     old, *token_list = list(tokenize(io.BytesIO(bytes(script, "utf-8")).readline))
     new_lines = "\n'';\\\n"
 

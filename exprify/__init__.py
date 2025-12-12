@@ -4,4 +4,4 @@ from .transpile import (
     transpiled_script,
     transpile_script_source,
 )
-from .reflow import reflow
+from .reflow import reflow, partition_token
