@@ -16,14 +16,76 @@ import io
 import python_minifier
 
 
-NON_SPLITTABLE = []
-if version_info >= (3, 12, 0):
-    from token import FSTRING_MIDDLE
+FSTRING_STARTS = ("f'", 'f"')
+BSTRING_STARTS = ("b'", 'b"')
 
-    NON_SPLITTABLE = [FSTRING_MIDDLE]
 TOLERANCE = 4
 # Make sure that "\\" is at the end, because it has the smallest window
 INVALID_SPLIT_CHARS = {"\\U": 8, "\\u": 4, "\\x": 2, "\\": 1}
+
+
+# Fallback for Python < 3.12
+def merge_fstring_literals(tokens):
+    return tokens
+
+
+if version_info >= (3, 12, 0):
+    from tokenize import FSTRING_END
+
+    def merge_fstring_literals(tokens):  # noqa: F811
+        merged_tokens = []
+        fstring_buffer = ""
+        for tok in tokens:
+            match tok.type:
+                case tk.FSTRING_START:
+                    fstring_buffer += tok.string
+                case tk.FSTRING_END:
+                    fstring_buffer += tok.string
+                    merged_tok = TokenInfo(
+                        **tok._asdict() | dict(string=fstring_buffer)
+                    )
+                    merged_tokens.append(merged_tok)
+                    fstring_buffer = ""
+                case _:
+                    prefix = ""
+                    if tok.type in (NAME, NUMBER):
+                        prefix = " "
+                    if fstring_buffer:
+                        fstring_buffer += prefix + tok.string
+                    else:
+                        merged_tokens.append(tok)
+        return merged_tokens
+
+else:
+    FSTRING_END = STRING
+
+
+def poss_fstring_splits(ts, space, tolerance):
+    # Generate possible splits that wouldn't break the f-string (not inside of an embedded expression).
+    # The range start is clamped so it is at minimum 2 to prevent splitting before the f-string identifier
+    poss_splits = []
+    format_specifier = False
+    for i in range(max(space - tolerance, 2), space + tolerance + 1):
+        if ts[i] == ":":
+            format_specifier = True
+        if ts[:i].count("{") == ts[:i].count("}") and not format_specifier:
+            format_specifier = False
+            poss_splits.append((i, abs(space - i)))
+    return poss_splits
+
+
+def split_escape_offset(ts, splpt):
+    for ch, window in INVALID_SPLIT_CHARS.items():
+        if ch in ts[splpt - window - 2 :]:
+            return window
+    return 0
+
+
+def split_mangles_escape(ts, splpt):
+    # if we have an escaped char as the last one, we want to go past it
+    while (offset := split_escape_offset(ts, splpt)) != 0:
+        splpt += offset
+    return splpt
 
 
 def partition_token(tok, space, tolerance):
@@ -33,24 +95,15 @@ def partition_token(tok, space, tolerance):
     left, right = ts[:splpt] + septok, septok + ts[splpt:]
     if splpt <= 2:
         left, right = ts, ""
-    if ts.startswith("f'"):
-        # Generate possible splits that wouldn't break the f-string (not inside of an embedded expression).
-        # The range start is clamped so it is at minimum 2 to prevent splitting before the f-string identifier
-        poss_splits = [
-            (i, abs(space - i))
-            for i in range(max(space - tolerance, 2), space + tolerance + 1)
-            if ts[:i].count("{") == ts[:i].count("}")
-        ]
+    if ts.startswith(FSTRING_STARTS):
+        poss_splits = poss_fstring_splits(ts, space, tolerance)
         if poss_splits:
             splpt, _ = min(poss_splits, key=lambda x: x[1])
             left, right = (ts[:splpt] + "'", "f'" + ts[splpt:])
         else:
             left, right = ts, ""
-    if ts.startswith("b'"):
-        # if we have an escaped char as the last one, we want to go past it
-        for ch, window in INVALID_SPLIT_CHARS.items():
-            if ch in ts[splpt - window - 2 :]:
-                splpt += window
+    if ts.startswith(BSTRING_STARTS):
+        splpt = split_mangles_escape(ts, splpt)
         if splpt >= len(ts):
             left, right = ts, ""
         else:
@@ -78,6 +131,7 @@ def reflow(script, outline, tolerance=TOLERANCE):
     )
     script = transpile_script_source(script)
     old, *token_list = list(tokenize(io.BytesIO(bytes(script, "utf-8")).readline))
+    token_list = merge_fstring_literals(token_list)
     new_lines = "\n'';\\\n"
 
     for line in outline.splitlines():
@@ -99,7 +153,7 @@ def reflow(script, outline, tolerance=TOLERANCE):
                         space = 0
                         break
                     if len(token_list[0].string.strip()) > space + tolerance:
-                        if token_list[0].type in (STRING, NAME):
+                        if token_list[0].type in (STRING, NAME, FSTRING_END):
                             # We can't split NAMEs if they don't have a dot in them
                             if (
                                 token_list[0].type == NAME
@@ -119,10 +173,6 @@ def reflow(script, outline, tolerance=TOLERANCE):
                         cur_token = token_list.pop(0)
 
                     tok_str = cur_token.string.strip()
-
-                    if cur_token.type in NON_SPLITTABLE:
-                        # if we're in the middle of an f-string, we need to make sure we get to an op before splitting
-                        tok_str += token_list.pop(0).string
 
                     match cur_token.type:
                         case tk.NEWLINE:

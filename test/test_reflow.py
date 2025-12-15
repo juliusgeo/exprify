@@ -9,18 +9,24 @@ SCRIPTS_PATH = "test_scripts"
 
 
 @pytest.mark.parametrize(
-    ("script", "outline"),
+    ("script", "outline", "tolerance"),
     [
-        ("test_scripts/zipy.py", "reflow_outlines/outline1.txt"),
-        ("test_scripts/rijndael.py", "reflow_outlines/outline2.txt"),
+        *[
+            ("test_scripts/zipy.py", "reflow_outlines/outline1.txt", tol)
+            for tol in range(0, 10)
+        ],
+        *[
+            ("test_scripts/rijndael.py", "reflow_outlines/outline2.txt", tol)
+            for tol in range(0, 10)
+        ],
     ],
 )
-def test_reflow_script(script, outline):
+def test_reflow_script(script, outline, tolerance):
     outline = open(outline).read()
     script = open(script).read()
-    for tolerance in range(0, 10):
-        reflowed_script = reflow(script, outline, tolerance=tolerance)
-        assert exec_with_output(reflowed_script) == exec_with_output(script)
+    reflowed_script = reflow(script, outline, tolerance=tolerance)
+    print(reflowed_script)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)
 
 
 def test_reflow_snippet():
@@ -73,6 +79,19 @@ b'\\x04bb'
     88888
     88888
     88888
+    88888
+    """
+    reflowed_script = reflow(script, outline, tolerance=0)
+    print(reflowed_script)
+    assert exec_with_output(reflowed_script) == exec_with_output(script)
+
+
+def test_reflow_fstring_format():
+    script = """
+f"{int('10'):010b}"
+    """
+    outline = """
+    888888888888888  88888
     88888
     """
     reflowed_script = reflow(script, outline, tolerance=0)
