@@ -74,9 +74,14 @@ def test_reflow_escape():
     script = """
 b'\\x05'
 b'\\x04bb'
+f'b\\nb\\tb{10}'
+"b\\nb\\tb"
     """
     outline = """
     88888
+    88888
+    8888888
+    8888
     88888
     88888
     88888

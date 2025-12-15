@@ -70,7 +70,8 @@ def poss_fstring_splits(ts, space, tolerance):
             format_specifier = True
         if ts[:i].count("{") == ts[:i].count("}") and not format_specifier:
             format_specifier = False
-            poss_splits.append((i, abs(space - i)))
+            if split_escape_offset(ts, i) == 0:
+                poss_splits.append((i, abs(space - i)))
     return poss_splits
 
 
@@ -91,6 +92,7 @@ def split_mangles_escape(ts, splpt):
 def partition_token(tok, space, tolerance):
     ts = tok.string
     splpt = ts.find(".") if tok.type == NAME else space
+    splpt = split_mangles_escape(ts, splpt)
     septok = "" if tok.type == NAME else "'"
     left, right = ts[:splpt] + septok, septok + ts[splpt:]
     if splpt <= 2:
@@ -103,7 +105,6 @@ def partition_token(tok, space, tolerance):
         else:
             left, right = ts, ""
     if ts.startswith(BSTRING_STARTS):
-        splpt = split_mangles_escape(ts, splpt)
         if splpt >= len(ts):
             left, right = ts, ""
         else:
@@ -122,6 +123,7 @@ def generate_whitespace_groups(line):
 
 def reflow(script, outline, tolerance=TOLERANCE):
     # Minify script and then transpile it
+    print(script)
     script = python_minifier.minify(
         script,
         rename_locals=True,
