@@ -3,4 +3,4 @@
 *.egg-info/
 build/
 demo/
-.venv/
+.venv*/
