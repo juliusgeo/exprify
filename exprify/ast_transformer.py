@@ -89,14 +89,24 @@ class StatementMapper(ast.NodeTransformer):
         else:
             return ast.Expr(value=imps[0])
 
+    def module_import_Helper(self, module):
+        if "." in module:
+            module, last = module.rsplit(".", 1)
+            return ast.Call(
+                func=ast.Name(id="getattr", ctx=ast.Load()),
+                args=[self.module_import_Helper(module), ast.Constant(value=last)],
+                keywords=[],
+            )
+        return ast.Call(
+            func=ast.Name(id="__import__", ctx=ast.Load()),
+            args=[ast.Constant(value=module)],
+            keywords=[],
+        )
+
     def visit_ImportFrom(self, node):
         # Replace from library import function with getattr(__import__(library), function) calls
         def imp_gen(name):
-            module = ast.Call(
-                func=ast.Name(id="__import__", ctx=ast.Load()),
-                args=[ast.Constant(value=node.module)],
-                keywords=[],
-            )
+            module = self.module_import_Helper(node.module)
             as_name = name.asname if name.asname else name.name
             return ast.NamedExpr(
                 target=ast.Name(id=as_name, ctx=ast.Store()),

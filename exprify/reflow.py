@@ -30,6 +30,11 @@ def merge_fstring_literals(tokens):
 
 
 if version_info >= (3, 12, 0):
+    # In Python versions >= 3.12, f-strings are now tokenized differently
+    # such that the expressions inside of braces are just normal OP, NAME, etc
+    # tokens rather than the previous behavior which tokenized the entire f-string as one.
+    # To keep the logic consistent in reflowing, we need to merge together all the tokens inside
+    # an f-string.
     from tokenize import FSTRING_END
 
     def merge_fstring_literals(tokens):  # noqa: F811
@@ -84,6 +89,7 @@ def split_escape_offset(ts, splpt):
 
 def split_mangles_escape(ts, splpt):
     # if we have an escaped char as the last one, we want to go past it
+    # keep going until we find a place to split that doesn't break any escaped chars
     while (offset := split_escape_offset(ts, splpt)) != 0:
         splpt += offset
     return splpt

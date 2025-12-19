@@ -50,7 +50,9 @@ def nested_func():
 def imports_func():
     import itertools
     from functools import reduce
+    from urllib.parse import urlparse
 
+    urlparse("http://google.com")
     x = 0
     s = 0
     while x < 15:
