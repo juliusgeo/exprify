@@ -51,14 +51,16 @@ def imports_func():
     import itertools
     from functools import reduce
     from urllib.parse import urlparse
+    import urllib.parse as p
 
-    urlparse("http://google.com")
+    u1 = p.urlparse("http://google.com")
+    u2 = urlparse("http://google.com")
     x = 0
     s = 0
     while x < 15:
         x = x + len(list(itertools.accumulate([1, 2, 3])))
         s += x + reduce(lambda a, b: a + b, [1, 2, 3])
-    return s
+    return str(s) + u1.hostname + u2.hostname
 
 
 def class_func():

@@ -90,6 +90,9 @@ class StatementMapper(ast.NodeTransformer):
             return ast.Expr(value=imps[0])
 
     def module_import_Helper(self, module):
+        # We cannot just call __import__ on things like `urllib.urlparse`,
+        # so we must recursively wrap each period delimited section of the import
+        # clause with getattr calls
         if "." in module:
             module, last = module.rsplit(".", 1)
             return ast.Call(
@@ -125,11 +128,7 @@ class StatementMapper(ast.NodeTransformer):
             as_name = name.asname if name.asname else name.name
             return ast.NamedExpr(
                 target=ast.Name(id=as_name, ctx=ast.Store()),
-                value=ast.Call(
-                    func=ast.Name(id="__import__", ctx=ast.Load()),
-                    args=[ast.Constant(value=name.name)],
-                    keywords=[],
-                ),
+                value=self.module_import_Helper(name.name),
             )
 
         return self.import_Helper(node, imp_gen)
