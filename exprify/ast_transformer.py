@@ -1,7 +1,13 @@
 import ast
 import itertools
 
+from exprify.injections import Injected
+
 intermediate_gen = itertools.count(1)
+
+
+def intermediate_name_gen():
+    return f"inter{next(intermediate_gen)}"
 
 
 class ExprifyException(Exception):
@@ -10,6 +16,7 @@ class ExprifyException(Exception):
 
 class StatementMapper(ast.NodeTransformer):
     top_level = True
+    required_injects = set()
 
     def visit_If(self, node):
         return ast.IfExp(
@@ -138,7 +145,7 @@ class StatementMapper(ast.NodeTransformer):
             return node
         if len(node.targets) == 1:
             if isinstance(node.targets[0], ast.Tuple):
-                intermediate_name = f"inter{next(intermediate_gen)}"
+                intermediate_name = intermediate_name_gen()
                 intermediate = ast.NamedExpr(
                     target=ast.Name(id=intermediate_name, ctx=ast.Store()),
                     value=node.value,
@@ -308,6 +315,101 @@ class StatementMapper(ast.NodeTransformer):
                 value=lambda_func,
             )
 
+    def visit_Raise(self, node):
+        self.required_injects.add(Injected.RAISE)
+        return ast.Call(
+            func=ast.Name(id="rH", ctx=ast.Load()),
+            args=[node.exc],
+            keywords=[node.cause] if node.cause else [],
+        )
+
+    def visit_Try(self, node):
+        # Alright, so this is a complicated one.
+        # The first aspect is we inject a class (called iEH) into the ast at the beginning
+        # That class provides a context manager, which will automatically catch exceptions
+        # it does something like this:
+        # 1. defines enter and exit functions
+        # 2. takes in a dictionary of Exception types -> lambda function mappings that do this
+        #    except Exception:
+        #        <what the lambda function represents>
+        # 3. takes in a "final" lambda function which is called after whichever lambda func is executed
+        # 4. Crucially, it injects an intermediate variable which is assigned the result of the handler functions *and*
+        #    the finally function to handle returning values.
+        # 5. in the exit function, returns true or false based on whether the exception is one of the ones we covered
+        #    with a handler, which abuses the contextlib property that will cause any exceptions to be raised if the
+        #    value is false
+        # 6. finally, gets the intermediate value and subscripts the tuple so that is what is actually returned
+        self.required_injects.add(Injected.EXCEPT)
+        intermediate_name = intermediate_name_gen()
+        intermediate = ast.NamedExpr(
+            target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+            value=self.map_body(node.body),
+        )
+        try_callable = ast.Lambda(
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
+            body=intermediate,
+        )
+
+        # Only assign the intermediate result if there is a finally clause
+        final_callable = (
+            ast.NamedExpr(
+                target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+                value=self.map_body(node.finalbody),
+            )
+            if node.finalbody
+            else ast.Name(id="None", ctx=ast.Load())
+        )
+
+        # Separate out cases where there are multiple exceptions grouped together
+        separated_handlers = []
+        for handler in node.handlers:
+            if isinstance(handler.type, ast.Tuple):
+                for t in handler.type.elts:
+                    separated_handlers.append(
+                        ast.ExceptHandler(type=t, body=handler.body)
+                    )
+            else:
+                separated_handlers.append(handler)
+
+        except_types = ast.Dict(
+            keys=[k.type for k in separated_handlers],
+            values=[
+                ast.NamedExpr(
+                    target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+                    value=self.map_body(v.body),
+                )
+                for v in separated_handlers
+            ],
+        )
+        ctx_mgr = ast.Call(
+            func=ast.Name(id="iEH", ctx=ast.Load()),
+            args=[],
+            keywords=[except_types, final_callable],
+        )
+
+        # Wrap the body of the try: except clause in the context manager to catch exceptions
+        wrapped_fun_call = ast.Call(
+            func=ast.Call(func=ctx_mgr, args=[try_callable], keywords=[]),
+            args=[],
+            keywords=[],
+        )
+
+        # Wrap the wrapped function call in a list with the last element being the intermediate value assigned to by the
+        # except clauses and/or finally clause
+        return ast.Subscript(
+            value=ast.Tuple(
+                elts=[wrapped_fun_call, ast.Name(id=intermediate_name, ctx=ast.Load())]
+            ),
+            slice=ast.Constant(value=-1),
+            ctx=ast.Load(),
+        )
+
     def visit_Continue(self, node):
         raise ExprifyException("Exprify does not support 'continue'")
 
@@ -326,14 +428,8 @@ class StatementMapper(ast.NodeTransformer):
     def visit_Pass(self, node):
         raise ExprifyException("Exprify does not support 'pass'")
 
-    def visit_Try(self, node):
-        raise ExprifyException("Exprify does not support 'try'")
-
     def visit_TryStar(self, node):
         raise ExprifyException("Exprify does not support 'try'")
-
-    def visit_Raise(self, node):
-        raise ExprifyException("Exprify does not support 'raise")
 
     def visit_AsyncFunctionDef(self, node):
         raise ExprifyException("Exprify does not support async")

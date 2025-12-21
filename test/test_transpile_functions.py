@@ -4,6 +4,7 @@ from exprify import transpiled_function_object
 from exprify.ast_transformer import ExprifyException
 
 
+# ruff: noqa: E721
 def basic_func():
     x = 0
     for i in range(10):
@@ -125,6 +126,50 @@ def context_manager_func():
         return f.read() + str(len(g.readlines()))
 
 
+def raise_func():
+    raise ValueError("went wrong")
+
+
+def raise_from_func():
+    raise ValueError("first one") from IndexError("second one")
+
+
+def try_func():
+    a = 1
+    try:
+        a + "blah"
+    except TypeError:
+        return "blah"
+
+
+def try_multiple_func():
+    a = 1
+    try:
+        a + "blah"
+    except AttributeError:
+        return "blahblah"
+    except TypeError:
+        return "blah"
+
+
+def try_multiple_oneline_func():
+    a = 1
+    try:
+        a + "blah"
+    except (TypeError, AttributeError):
+        return "blah"
+
+
+def try_finally_func():
+    a = 1
+    try:
+        a + "blah"
+    except TypeError:
+        return "blah"
+    finally:
+        return "blahblah"
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -137,12 +182,33 @@ def context_manager_func():
         context_manager_func,
         readme_example_func,
         recursive_func,
+        try_func,
+        try_multiple_func,
+        try_multiple_oneline_func,
+        try_finally_func,
     ],
 )
 def test_func_no_args(func):
     a = func()
     b = transpiled_function_object(func, debug=True)()
     assert a == b, f"{a} != {b}"
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        raise_func,
+        raise_from_func,
+    ],
+)
+def test_func_raises(func):
+    with pytest.raises(Exception) as exc1:
+        func()
+
+    with pytest.raises(Exception) as exc2:
+        transpiled_function_object(func, debug=True)()
+    assert type(exc1.value.__cause__) == type(exc2.value.__cause__), f"{exc1} != {exc2}"
+    assert type(exc1.value) == type(exc2.value), f"{exc1} != {exc2}"
 
 
 @pytest.mark.parametrize("func, args", [(multiple_returns_func, (1, -1, 0))])
@@ -180,17 +246,6 @@ def del_func():
 
 def pass_func():
     pass
-
-
-def try_func():
-    try:
-        raise Exception()
-    except Exception:
-        return None
-
-
-def raise_func():
-    raise Exception()
 
 
 def async_func():
@@ -233,8 +288,6 @@ def global_func():
         yield_from_func,
         del_func,
         pass_func,
-        try_func,
-        raise_func,
         async_func,
         async_for_func,
         async_with_func,
