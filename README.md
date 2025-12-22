@@ -177,6 +177,48 @@ tuple_unpacking_func = lambda: [[(inter7 := (0, 1)),
                                 (x, y)][-1]
 ```
 
+###### Exception handling
+
+Exception handling is tricky using expressions only. First, you must abuse the `contextlib.ContextDecorator` class to create
+an error handling class that looks like this:
+
+```python
+from contextlib import ContextDecorator
+class capture_exceptions(ContextDecorator):
+    def __init__(self, except_handlers={}, final=None, except_callable=None):
+        self.except_handlers = except_handlers
+        self.final = final
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.except_handlers.get(exc_type, None)
+        self.final
+        return exc_type in self.except_handlers
+```
+
+This uses a unique feature of context managers, which will call the `__exit__` function when they're done,
+with some info on what exceptions happened during. Then, if you provide the exception types, and a corresponding expression
+that assigns to an intermediate result, you can emulate the behavior of:
+
+```python
+try:
+    return 1 + "1"
+except TypeError:
+    return "blah"
+```
+with:
+```python
+(capture_exceptions(except_handlers={Exception: (inter:= "blah")})(lambda: (inter := 1 + "1"))(), inter)
+```
+Which will work correctly! And, once you convert the `capture_exceptions` class to expression-only syntax and then
+inject it at the beginning of the script, results in error handling code that doesn't need any indentation.
+
+Throwing exceptions is similarly hacky, abusing the `.throw()` method of generators:
+```python
+(_ for _ in ()).throw(IndexError)
+```
 
 
 ##### Creating ASCII art
