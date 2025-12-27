@@ -228,7 +228,8 @@ This would be translated to something like:
 ```python
 lambda: [(a := 1), ((inter66 := dict(a=a)), iEH({TypeError: lambda exception: inter66.update(inter65=inter66.update(a=2))}, lambda: None)(lambda: inter66.update(inter65=(a := (inter66.get('a') + 'blah'))))(), ((a := inter66.get('a')),), inter66.get('inter65'))[-1], a][-1]
 ```
-However, `a` is not in scope *inside* the lambda function. So we need some method of passing the values into the lambda scope, and then getting them back out.
+
+In this example, `iEH` is the Injected Exception Handler, similar to `capture_exceptions` above except it is written in the expression-only syntax.
 The approach `exprify` takes is creating a new dictionary that holds the local values, and then assignments update that locals dictionary.
 At the end of the enclosing lambda function, we reassign the values from the local dictionary to their original variables.
 
