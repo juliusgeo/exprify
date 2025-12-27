@@ -215,6 +215,23 @@ with:
 Which will work correctly! And, once you convert the `capture_exceptions` class to expression-only syntax and then
 inject it at the beginning of the script, results in error handling code that doesn't need any indentation.
 
+Now, what about handling scopes. Let's say you had a try except like this:
+
+```python
+a = 1
+try:
+    a += "blah"
+except TypeError:
+    a += 1
+```
+This would be translated to something like:
+```python
+lambda: [(a := 1), ((inter66 := dict(a=a)), iEH({TypeError: lambda exception: inter66.update(inter65=inter66.update(a=2))}, lambda: None)(lambda: inter66.update(inter65=(a := (inter66.get('a') + 'blah'))))(), ((a := inter66.get('a')),), inter66.get('inter65'))[-1], a][-1]
+```
+However, `a` is not in scope *inside* the lambda function. So we need some method of passing the values into the lambda scope, and then getting them back out.
+The approach `exprify` takes is creating a new dictionary that holds the local values, and then assignments update that locals dictionary.
+At the end of the enclosing lambda function, we reassign the values from the local dictionary to their original variables.
+
 Throwing exceptions is similarly hacky, abusing the `.throw()` method of generators:
 ```python
 (_ for _ in ()).throw(IndexError)
@@ -316,6 +333,5 @@ in `test/test_scripts/zipy.py`.
 The following are not supported because they do not have equivalent expression equivalents, and I wasn't able to figure out
 some amalgamation of expressions that would emulate their behavior.
 
-- Does not support error handling
 - Does not support `async`
 - Does not support statements like `yield`, `break`, `del`, `continue`

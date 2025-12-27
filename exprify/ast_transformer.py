@@ -144,7 +144,10 @@ class StatementMapper(ast.NodeTransformer):
                 ],
                 keywords=[],
             )
-
+        if self.scopes.current_scope().in_nested_scope:
+            target_load = self.get_Locals(
+                target_load, self.scopes.current_scope().get_current_locals_name()
+            )
         return ast.NamedExpr(
             target=node.target,
             value=ast.BinOp(left=target_load, op=node.op, right=node.value),

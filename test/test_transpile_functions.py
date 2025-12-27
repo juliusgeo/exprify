@@ -154,6 +154,27 @@ def try_func():
     return a + b
 
 
+def try_aug_assign_func():
+    a = 1
+    try:
+        a += "blah"
+    except TypeError:
+        a = 2
+    return a
+
+
+def try_aug_assign_attr_func():
+    class A:
+        a = 0
+
+    b = A()
+    try:
+        b.a += "blah"
+    except TypeError:
+        b.a = 2
+    return b.a
+
+
 def nested_try_func():
     a = 1
     b = 2
@@ -223,6 +244,8 @@ def try_finally_func():
         readme_example_func,
         recursive_func,
         try_func,
+        try_aug_assign_func,
+        try_aug_assign_attr_func,
         try_multiple_func,
         try_multiple_oneline_func,
         try_finally_func,
