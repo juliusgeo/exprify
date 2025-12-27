@@ -126,6 +126,13 @@ def context_manager_func():
         return f.read() + str(len(g.readlines()))
 
 
+def context_manager_scoped_func():
+    a = "blah"
+    with open("test_scripts/zipy.py") as f, open("test_scripts/zipy.py") as g:
+        a = a + f.read() + str(len(g.readlines()))
+    return a
+
+
 def raise_func():
     raise ValueError("went wrong")
 
@@ -136,10 +143,43 @@ def raise_from_func():
 
 def try_func():
     a = 1
+    b = 2
     try:
         a + "blah"
     except TypeError:
-        return "blah"
+        a, b = 2, 3
+    except AttributeError:
+        print("blah")
+    b += 2
+    return a + b
+
+
+def nested_try_func():
+    a = 1
+    b = 2
+    try:
+        try:
+            try:
+                a + "blah"
+            except Exception:
+                raise TypeError()
+        except Exception:
+            raise TypeError()
+    except TypeError:
+        a = 2
+        b = 3
+    except AttributeError:
+        print("blah")
+    b += 2
+    return a + b
+
+
+def try_as_func():
+    a = 1
+    try:
+        a + "blah"
+    except TypeError as e:
+        return str(e)
 
 
 def try_multiple_func():
@@ -186,6 +226,8 @@ def try_finally_func():
         try_multiple_func,
         try_multiple_oneline_func,
         try_finally_func,
+        try_as_func,
+        nested_try_func,
     ],
 )
 def test_func_no_args(func):

@@ -26,15 +26,15 @@ def except_func():
             "iEH",
             ((ctx_dec,)),
             {
-                "__init__": lambda iEH, except_handlers={}, final=None: [
+                "__init__": lambda iEH, except_handlers={}, final=lambda: None: [
                     setattr(iEH, "except_handlers", except_handlers),
                     setattr(iEH, "final", final),
                 ][-1],
                 "__enter__": lambda iEH: iEH,
                 "__exit__": lambda iEH, exc_type, exc, tb: [
                     (B := exc_type),
-                    (iEH.except_handlers.get(B, None)),
-                    (iEH.final),
+                    (iEH.except_handlers.get(B, lambda *_: None)(exc)),
+                    (iEH.final()),
                     B in iEH.except_handlers,
                 ][-1],
             },

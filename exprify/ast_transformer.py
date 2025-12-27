@@ -2,6 +2,8 @@ import ast
 import itertools
 
 from exprify.injections import Injected
+from contextlib import contextmanager
+from dataclasses import dataclass
 
 intermediate_gen = itertools.count(1)
 
@@ -14,9 +16,68 @@ class ExprifyException(Exception):
     pass
 
 
+@dataclass
+class Scope:
+    variables: dict
+    locals_names: list[str]
+    is_global: bool = False
+
+    @property
+    def vars(self):
+        return list(self.variables.values())
+
+    def add_var(self, var):
+        self.variables[var.id] = var
+
+    def extend_vars(self, vars):
+        for v in vars:
+            match type(v):
+                case ast.Name:
+                    self.add_var(v)
+                case ast.Tuple:
+                    for vv in v.elts:
+                        self.add_var(vv)
+
+    def get_current_locals_name(self):
+        return self.locals_names[-1]
+
+    @property
+    def in_nested_scope(self):
+        return len(self.locals_names) > 0
+
+    @contextmanager
+    def enter_nested_scope(self):
+        self.locals_names.append(intermediate_name_gen())
+        yield
+        self.locals_names.pop(-1)
+
+
+class Scopes:
+    scopes: list[Scope] = [Scope({}, [], is_global=True)]
+
+    def current_scope(self):
+        return self.scopes[-1]
+
+    def add(self):
+        self.scopes.append(Scope({}, []))
+
+    def pop(self):
+        self.scopes.pop(-1)
+
+    def has_scope(self):
+        return len(self.scopes) > 0
+
+    @contextmanager
+    def enter_scope(self):
+        self.add()
+        yield
+        self.pop()
+
+
 class StatementMapper(ast.NodeTransformer):
     top_level = True
     required_injects = set()
+    scopes: Scopes = Scopes()
 
     def visit_If(self, node):
         return ast.IfExp(
@@ -140,7 +201,71 @@ class StatementMapper(ast.NodeTransformer):
 
         return self.import_Helper(node, imp_gen)
 
+    def update_Locals(self, name, value):
+        return ast.Call(
+            func=ast.Attribute(
+                value=ast.Name(
+                    id=self.scopes.current_scope().get_current_locals_name(),
+                    ctx=ast.Load(),
+                ),
+                attr="update",
+            ),
+            args=[],
+            keywords=[ast.keyword(arg=name, value=value)],
+        )
+
+    def get_Locals(self, node, intermediate_name):
+        match type(node):
+            case ast.Name:
+                return ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id=intermediate_name, ctx=ast.Load()), attr="get"
+                    ),
+                    args=[ast.Constant(node.id)],
+                    keywords=[],
+                )
+            case ast.Attribute:
+                ret = ast.Attribute(
+                    value=ast.Call(
+                        func=ast.Attribute(
+                            value=ast.Name(id=intermediate_name, ctx=ast.Load()),
+                            attr="get",
+                        ),
+                        args=[ast.Constant(node.value)],
+                        keywords=[],
+                    ),
+                    attr=node.attr,
+                )
+                return ret
+        return node
+
+    def generate_Assignment(self, node, value):
+        if isinstance(node, ast.Name):
+            if self.scopes.current_scope().in_nested_scope:
+                return self.update_Locals(node.id, value)
+            return ast.NamedExpr(target=node, value=value)
+        elif isinstance(node, ast.Attribute):
+            return ast.Call(
+                func=ast.Name(id="setattr", ctx=ast.Load()),
+                args=[
+                    node.value,
+                    ast.Constant(value=node.attr),
+                    value,
+                ],
+                keywords=[],
+            )
+
+    def visit_Name(self, node):
+        if self.scopes.current_scope().in_nested_scope:
+            return self.get_Locals(
+                node, self.scopes.current_scope().get_current_locals_name()
+            )
+        else:
+            return node
+
     def visit_Assign(self, node):
+        if self.scopes.has_scope():
+            self.scopes.current_scope().extend_vars(node.targets)
         if self.top_level:
             return node
         if len(node.targets) == 1:
@@ -151,9 +276,9 @@ class StatementMapper(ast.NodeTransformer):
                     value=node.value,
                 )
                 targets = [intermediate] + [
-                    ast.NamedExpr(
-                        target=target,
-                        value=ast.Subscript(
+                    self.generate_Assignment(
+                        target,
+                        ast.Subscript(
                             ast.Name(id=intermediate_name, ctx=ast.Load()),
                             slice=ast.Constant(value=index),
                             ctx=ast.Load(),
@@ -162,18 +287,7 @@ class StatementMapper(ast.NodeTransformer):
                     for index, target in enumerate(node.targets[0].elts)
                 ]
             else:
-                if isinstance(node.targets[0], ast.Name):
-                    return ast.NamedExpr(target=node.targets[0], value=node.value)
-                elif isinstance(node.targets[0], ast.Attribute):
-                    return ast.Call(
-                        func=ast.Name(id="setattr", ctx=ast.Load()),
-                        args=[
-                            node.targets[0].value,
-                            ast.Constant(value=node.targets[0].attr),
-                            node.value,
-                        ],
-                        keywords=[],
-                    )
+                return self.generate_Assignment(node.targets[0], node.value)
         else:
             targets = [
                 ast.NamedExpr(target=target, value=node.value)
@@ -296,24 +410,26 @@ class StatementMapper(ast.NodeTransformer):
         # Remove type annotations
         for arg in node.args.args:
             arg.annotation = None
-        # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
-        if self.top_level:
-            self.top_level = False
-            function_body = self.map_body(node)
-            self.top_level = True
-            return ast.Assign(
-                targets=[ast.Name(id=node.name, ctx=ast.Store())],
-                value=ast.Lambda(args=node.args, body=function_body),
-            )
-        else:
-            function_body = self.map_body(node)
-            lambda_func = ast.Lambda(args=node.args, body=function_body)
-            if class_def:
-                return lambda_func
-            return ast.NamedExpr(
-                target=ast.Name(id=node.name, ctx=ast.Store()),
-                value=lambda_func,
-            )
+        with self.scopes.enter_scope():
+            # If the function is top level, we want to use normal assignment. Otherwise, has to be a named expression.
+            if self.top_level:
+                self.top_level = False
+                function_body = self.map_body(node)
+                self.scope_vars = []
+                self.top_level = True
+                return ast.Assign(
+                    targets=[ast.Name(id=node.name, ctx=ast.Store())],
+                    value=ast.Lambda(args=node.args, body=function_body),
+                )
+            else:
+                function_body = self.map_body(node)
+                lambda_func = ast.Lambda(args=node.args, body=function_body)
+                if class_def:
+                    return lambda_func
+                return ast.NamedExpr(
+                    target=ast.Name(id=node.name, ctx=ast.Store()),
+                    value=lambda_func,
+                )
 
     def visit_Raise(self, node):
         self.required_injects.add(Injected.RAISE)
@@ -321,6 +437,53 @@ class StatementMapper(ast.NodeTransformer):
             func=ast.Name(id="rH", ctx=ast.Load()),
             args=[node.exc],
             keywords=[node.cause] if node.cause else [],
+        )
+
+    def reassign_Locals(self, intermediate_name, scope_vars):
+        local_names = self.scopes.current_scope().locals_names
+        if len(local_names) > 0:
+            prev_locals, cur_locals = local_names[-1], intermediate_name
+            return ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(
+                        id=prev_locals,
+                        ctx=ast.Load(),
+                    ),
+                    attr="update",
+                ),
+                args=[],
+                keywords=[
+                    ast.keyword(
+                        arg=None,  # ** unpacking
+                        value=ast.Name(id=cur_locals, ctx=ast.Load()),
+                    )
+                ],
+            )
+        return ast.Tuple(
+            elts=[
+                self.generate_Assignment(var, self.get_Locals(var, intermediate_name))
+                for var in scope_vars
+            ],
+            ctx=ast.Load(),
+        )
+
+    def assign_Locals_Intermediate(self, intermediate_name, scope_vars):
+        # if we're not at top level, we want to copy the previous intermediates
+        if len(self.scopes.current_scope().locals_names) > 1:
+            return ast.NamedExpr(
+                target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+                value=ast.Name(
+                    self.scopes.current_scope().locals_names[-2], ctx=ast.Load()
+                ),
+                args=[],
+                keywords=[],
+            )
+
+        # if we're at the top level, we just want to rebind the values in scope into the intermediate dict
+        arguments = [ast.keyword(arg=a, value=v) for a, v in scope_vars.items()]
+        return ast.NamedExpr(
+            target=ast.Name(id=intermediate_name, ctx=ast.Store()),
+            value=ast.Call(func=ast.Name(id="dict"), args=[], keywords=arguments),
         )
 
     def visit_Try(self, node):
@@ -339,72 +502,106 @@ class StatementMapper(ast.NodeTransformer):
         #    with a handler, which abuses the contextlib property that will cause any exceptions to be raised if the
         #    value is false
         # 6. finally, gets the intermediate value and subscripts the tuple so that is what is actually returned
+        #
+        # Scopes must also be handled. We do this by creating a new scope whenever we enter a function.
+        # The tricky part is that because all of these exception handlers are creating new lambda functions (and if it's
+        # a nested try, nested lambda functions), we have to keep track of the scopes, where we are at in the nesting,
+        # and inject an intermediate dictionary that copies variables from the local scope, and then reassigns them at the
+        # end. Each new nested scope needs to copy the previous nests' dictionary, and then also reassign to that dictionary
+        # at the end.
         self.required_injects.add(Injected.EXCEPT)
         intermediate_name = intermediate_name_gen()
-        intermediate = ast.NamedExpr(
-            target=ast.Name(id=intermediate_name, ctx=ast.Store()),
-            value=self.map_body(node.body),
-        )
-        try_callable = ast.Lambda(
-            args=ast.arguments(
+
+        def assign_return_value(node):
+            return self.update_Locals(intermediate_name, node)
+
+        with self.scopes.current_scope().enter_nested_scope():
+            intermediate_locals = self.scopes.current_scope().get_current_locals_name()
+            define_local_dict = self.assign_Locals_Intermediate(
+                intermediate_locals, self.scopes.current_scope().variables
+            )
+
+            # need to figure out which variables are used in the lambda body and which ones are also in the greater scope and
+            # add them as default kw arguments
+            default_lambda_args = ast.arguments(
                 posonlyargs=[],
                 args=[],
                 kwonlyargs=[],
                 kw_defaults=[],
                 defaults=[],
-            ),
-            body=intermediate,
-        )
-
-        # Only assign the intermediate result if there is a finally clause
-        final_callable = (
-            ast.NamedExpr(
-                target=ast.Name(id=intermediate_name, ctx=ast.Store()),
-                value=self.map_body(node.finalbody),
             )
-            if node.finalbody
-            else ast.Name(id="None", ctx=ast.Load())
-        )
 
-        # Separate out cases where there are multiple exceptions grouped together
-        separated_handlers = []
-        for handler in node.handlers:
-            if isinstance(handler.type, ast.Tuple):
-                for t in handler.type.elts:
-                    separated_handlers.append(
-                        ast.ExceptHandler(type=t, body=handler.body)
-                    )
-            else:
-                separated_handlers.append(handler)
+            try_callable = ast.Lambda(
+                body=assign_return_value(self.map_body(node.body)),
+                args=default_lambda_args,
+            )
 
-        except_types = ast.Dict(
-            keys=[k.type for k in separated_handlers],
-            values=[
-                ast.NamedExpr(
-                    target=ast.Name(id=intermediate_name, ctx=ast.Store()),
-                    value=self.map_body(v.body),
+            # Only assign the intermediate result if there is a finally clause
+            final_callable = (
+                ast.Lambda(
+                    body=assign_return_value(self.map_body(node.finalbody)),
+                    args=default_lambda_args,
                 )
-                for v in separated_handlers
-            ],
-        )
-        ctx_mgr = ast.Call(
-            func=ast.Name(id="iEH", ctx=ast.Load()),
-            args=[],
-            keywords=[except_types, final_callable],
-        )
+                if node.finalbody
+                else ast.Lambda(body=ast.Constant(value=None), args=default_lambda_args)
+            )
 
-        # Wrap the body of the try: except clause in the context manager to catch exceptions
-        wrapped_fun_call = ast.Call(
-            func=ast.Call(func=ctx_mgr, args=[try_callable], keywords=[]),
-            args=[],
-            keywords=[],
-        )
+            # Separate out cases where there are multiple exceptions grouped together
+            separated_handlers = []
+            for handler in node.handlers:
+                if isinstance(handler.type, ast.Tuple):
+                    for t in handler.type.elts:
+                        separated_handlers.append(
+                            ast.ExceptHandler(type=t, body=handler.body)
+                        )
+                else:
+                    separated_handlers.append(handler)
+
+            except_types = ast.Dict(
+                keys=[k.type for k in separated_handlers],
+                values=[
+                    ast.Lambda(
+                        body=assign_return_value(self.map_body(v.body)),
+                        args=ast.arguments(
+                            posonlyargs=[],
+                            args=[ast.arg(v.name or "exception")],
+                            kwonlyargs=[],
+                            kw_defaults=[],
+                            defaults=[],
+                        ),
+                    )
+                    for v in separated_handlers
+                ],
+            )
+
+            ctx_mgr = ast.Call(
+                func=ast.Name(id="iEH", ctx=ast.Load()),
+                args=[],
+                keywords=[except_types, final_callable],
+            )
+
+            # Wrap the body of the try: except clause in the context manager to catch exceptions
+            wrapped_fun_call = ast.Call(
+                func=ast.Call(func=ctx_mgr, args=[try_callable], keywords=[]),
+                args=[],
+                keywords=[],
+            )
 
         # Wrap the wrapped function call in a list with the last element being the intermediate value assigned to by the
         # except clauses and/or finally clause
         return ast.Subscript(
             value=ast.Tuple(
-                elts=[wrapped_fun_call, ast.Name(id=intermediate_name, ctx=ast.Load())]
+                elts=[
+                    define_local_dict,
+                    wrapped_fun_call,
+                    self.reassign_Locals(
+                        intermediate_locals, self.scopes.current_scope().vars
+                    ),
+                    self.get_Locals(
+                        ast.Name(id=intermediate_name, ctx=ast.Load()),
+                        intermediate_locals,
+                    ),
+                ]
             ),
             slice=ast.Constant(value=-1),
             ctx=ast.Load(),
