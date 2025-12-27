@@ -86,12 +86,12 @@ You can see now why it might be preferable to write in the first form, rather th
 Most of the tricks used here are described in a [wonderful article](https://qiita.com/KTakahiro1729/items/c9cb757473de50652374) by KTakahiro1729 (in Japanese).
 This package automates the process of conversion, and introduces a few new tricks for other language constructs.
 
-###### Functions
+#### Functions
 
 Functions are converted into lambda functions, where the body is a tuple containing NamedExpressions, or list comprehensions. Because a lambda function by default returns the entire expression,
 if there is a return value that is appended to the end of the tuple, and it is wrapped in a subscript so that the return value is returned instead of the entire tuple.
 
-###### Loops and blocks
+#### Loops and blocks
 `for` loops are probably the easiest to convert, as they map very cleanly to list comprehensions (as long as the limitations are not exceeded).
 ```python
 def basic_func():
@@ -137,7 +137,7 @@ context_manager_func = lambda: ((f := getattr(open('test_scripts/zipy.py'), '__e
 ```
 Notice the subscript in this case is to elide the calls to `__enter__` and `__exit__` from the return value.
 
-###### Classes
+#### Classes
 Classes are converted into a tuple containing a call to `type` and a dictionary of class attributes and methods.
 Attributes are mutated using setattr, because you can't assign to a class attribute in a NamedExpression, but attribute access is the same.
 ```python
@@ -158,7 +158,7 @@ class A:
                                  setattr(self, 'y', self.x)][-1]}))
 ```
 
-###### Tuple unpacking
+#### Tuple unpacking
 
 You unfortunately cannot do tuple unpacking in named expressions. Something like `x,y:=1,2` will not work. So, instead we
 just assign a temporary variable, and then assign each target in the unpacking to the temporary variable.
@@ -177,7 +177,7 @@ tuple_unpacking_func = lambda: [[(inter7 := (0, 1)),
                                 (x, y)][-1]
 ```
 
-###### Exception handling
+#### Exception handling
 
 Exception handling is tricky using expressions only. First, you must abuse the `contextlib.ContextDecorator` class to create
 an error handling class that looks like this:
@@ -238,7 +238,7 @@ Throwing exceptions is similarly hacky, abusing the `.throw()` method of generat
 ```
 
 
-##### Creating ASCII art
+#### Creating ASCII art
 
 The script is first minified using [python-minifier](https://github.com/dflook/python-minifier). `python-minifier` renames
 variables, and removes unneeded elements from the script, but does not change the structure of the code.
