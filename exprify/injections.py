@@ -32,10 +32,18 @@ def except_func():
                 ][-1],
                 "__enter__": lambda iEH: iEH,
                 "__exit__": lambda iEH, exc_type, exc, tb: [
-                    (B := exc_type),
-                    (iEH.except_handlers.get(B, lambda *_: None)(exc)),
+                    (
+                        handler := (
+                            [
+                                handler
+                                for type, handler in iEH.except_handlers.items()
+                                if issubclass(exc_type, type)
+                            ]
+                        )
+                    ),
+                    ((handler or [lambda *_: None])[0](exc)),
                     (iEH.final()),
-                    B in iEH.except_handlers,
+                    (handler != []),
                 ][-1],
             },
         ),

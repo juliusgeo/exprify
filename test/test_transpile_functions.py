@@ -231,6 +231,15 @@ def try_finally_func():
         return "blahblah"
 
 
+def try_exception_order_func():
+    try:
+        1 + "blah"
+    except Exception:
+        return "blahblah"
+    except TypeError:
+        return "blah"
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -251,6 +260,7 @@ def try_finally_func():
         try_finally_func,
         try_as_func,
         nested_try_func,
+        try_exception_order_func,
     ],
 )
 def test_func_no_args(func):
