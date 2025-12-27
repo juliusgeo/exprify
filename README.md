@@ -185,7 +185,7 @@ an error handling class that looks like this:
 ```python
 from contextlib import ContextDecorator
 class capture_exceptions(ContextDecorator):
-    def __init__(self, except_handlers={}, final=None, except_callable=None):
+    def __init__(self, except_handlers={}, final=lambda *_: None):
         self.except_handlers = except_handlers
         self.final = final
 
@@ -193,8 +193,8 @@ class capture_exceptions(ContextDecorator):
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        self.except_handlers.get(exc_type, None)
-        self.final
+        self.except_handlers.get(exc_type, lambda *_: None)()
+        self.final()
         return exc_type in self.except_handlers
 ```
 
