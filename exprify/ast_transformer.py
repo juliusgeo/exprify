@@ -438,7 +438,7 @@ class StatementMapper(ast.NodeTransformer):
         self.required_injects.add(Injected.RAISE)
         return ast.Call(
             func=ast.Name(id="rH", ctx=ast.Load()),
-            args=[node.exc],
+            args=[node.exc or ast.Name(id="e", ctx=ast.Load())],
             keywords=[node.cause] if node.cause else [],
         )
 
@@ -567,7 +567,7 @@ class StatementMapper(ast.NodeTransformer):
                         body=assign_return_value(self.map_body(v.body)),
                         args=ast.arguments(
                             posonlyargs=[],
-                            args=[ast.arg(v.name or "exception")],
+                            args=[ast.arg(v.name or "e")],
                             kwonlyargs=[],
                             kw_defaults=[],
                             defaults=[],

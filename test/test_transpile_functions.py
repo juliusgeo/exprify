@@ -141,6 +141,13 @@ def raise_from_func():
     raise ValueError("first one") from IndexError("second one")
 
 
+def re_raise_func():
+    try:
+        1 + "2"
+    except ValueError:
+        raise
+
+
 def try_func():
     a = 1
     b = 2
@@ -274,6 +281,7 @@ def test_func_no_args(func):
     [
         raise_func,
         raise_from_func,
+        re_raise_func,
     ],
 )
 def test_func_raises(func):
