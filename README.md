@@ -1,18 +1,19 @@
 # Exprify
 
+[![PyPI version](https://img.shields.io/pypi/v/exprify)](
+https://pypi.org/project/exprify/
+)
+![Python versions](https://img.shields.io/pypi/pyversions/exprify)
+![License](https://img.shields.io/github/license/juliusgeo/exprify)
+
 Convert a subset of Python to expression-only syntax while preserving semantics.
 Additionally includes functionality for reflowing the expression-only code into executable ASCII art.
 
 ![](https://github.com/juliusgeo/exprify/blob/master/demo.gif)
 
 ### Installation
-Currently not on PyPi, so you'll need to install from source:
 ```bash
-git clone git@github.com:juliusgeo/exprify.git
-cd exprify
-pip install .
-# Install requirements
-pip install -r requirements.txt
+pip install exprify
 ```
 
 ### Usage

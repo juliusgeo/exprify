@@ -20,6 +20,9 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python"
 ]
+dependencies = [
+  "python-minifier"
+]
 
 [tool.ruff]
 exclude = ["exprify/__init__.py"]
